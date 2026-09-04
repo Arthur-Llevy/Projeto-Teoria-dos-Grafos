@@ -1,0 +1,12 @@
+services:
+  web:
+    build: .
+    container_name: course-management-api
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+    command: gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
+    restart: unless-stopped
