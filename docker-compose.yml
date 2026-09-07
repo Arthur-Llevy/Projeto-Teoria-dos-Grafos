@@ -8,5 +8,6 @@ services:
       - PYTHONUNBUFFERED=1
       - FLASK_ENV=production
       - FLASK_DEBUG=0
+      - FLASK_APP=app:app
     command: gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
     restart: unless-stopped
