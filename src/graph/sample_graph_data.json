@@ -29,7 +29,7 @@
       "type": "professor",
       "properties": {
         "id": "p1",
-        "nome": "Prof. Silva",
+        "nome": "Prof. Cleyton",
         "matricula": "123456",
         "curso_id": "c1"
       },
@@ -52,8 +52,8 @@
         "id": "h1",
         "periodo": "2026.1",
         "dia": "Segunda",
-        "hora_inicio": "08:00",
-        "hora_fim": "10:00"
+        "hora_inicio": "08:50",
+        "hora_fim": "10:30"
       },
       "created_at": "2026-09-22T10:30:00"
     }

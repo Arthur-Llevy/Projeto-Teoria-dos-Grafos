@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grade de horários | {{ course.nome or "Curso" }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="schedule-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Visão semanal</p>
+            <h2>Programação das aulas</h2>
+          </div>
+          <span class="lesson-count"
+            >{{ entries|length }} aula{% if entries|length != 1 %}s{% endif
+            %}</span
+          >
+        </div>
+        <div class="table-wrap">
+          <div class="schedule-grid">
+            <div class="time-head">HORÁRIO</div>
+            {% for day in ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] %}
+            <div class="day-head">{{ day }}</div>
+            {% endfor %} {% for slot in [ {"start": "07:10", "label": "07:10 —
+            08:50"}, {"start": "08:50", "label": "08:50 — 10:30"}, {"start":
+            "10:30", "label": "10:30 — 12:10"}, {"start": "12:10", "label":
+            "12:10 — 13:50"}, {"start": "13:50", "label": "13:50 — 15:30"} ] %}
+            <div class="time-cell">{{ slot.label }}</div>
+            {% for day in ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] %}
+            <div class="lesson-cell">
+              {% for entry in entries if entry.day == day and entry.start ==
+              slot.start %}
+              <article class="lesson-card">
+                <div class="lesson-top">
+                  <span class="lesson-code">{{ entry.discipline.codigo }}</span
+                  ><span class="lesson-time"
+                    >{{ entry.start }} — {{ entry.end }}</span
+                  >
+                </div>
+                <h3>{{ entry.discipline.nome }}</h3>
+                <p>{{ entry.professor.nome or "Professor não informado" }}</p>
+                <div class="room">
+                  ⌂ {{ entry.room.nome or "Sala não informada" }}
+                </div>
+              </article>
+              {% endfor %}
+            </div>
+            {% endfor %} {% endfor %}
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
