@@ -1,20 +1,23 @@
+from src.graph.graph_db import GraphDatabase
+from src.graph.builder import GraphBuilder
 from src.graph.models import (
     Disciplina,
-    Professor,
     Curso,
-    Sala,
     Horario,
+    Professor,
     NodeType,
     RelationType,
+    Sala,
 )
 
 __all__ = [
-    # 'GraphDatabase',
-    'Disciplina',
-    'Professor',
-    'Curso',
-    'Sala',
-    'Horario',
-    'NodeType',
-    'RelationType'
+    "GraphDatabase",
+    "GraphBuilder",
+    "Disciplina",
+    "Curso",
+    "Horario",
+    "Professor",
+    "NodeType",
+    "RelationType",
+    "Sala",
 ]

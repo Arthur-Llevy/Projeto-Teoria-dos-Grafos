@@ -1,0 +1,91 @@
+{
+  "nodes": {
+    "curso_c1": {
+      "id": "curso_c1",
+      "type": "curso",
+      "properties": {
+        "id": "c1",
+        "nome": "Engenharia de Software",
+        "descricao": "Curso de Engenharia de Software"
+      },
+      "created_at": "2026-09-22T10:30:00"
+    },
+    "disciplina_d1": {
+      "id": "disciplina_d1",
+      "type": "disciplina",
+      "properties": {
+        "id": "d1",
+        "nome": "Algoritmos",
+        "codigo": "CS101",
+        "carga_horaria": 80,
+        "periodo": 1,
+        "eh_eletiva": false,
+        "curso_id": "c1"
+      },
+      "created_at": "2026-09-22T10:30:00"
+    },
+    "professor_p1": {
+      "id": "professor_p1",
+      "type": "professor",
+      "properties": {
+        "id": "p1",
+        "nome": "Prof. Silva",
+        "matricula": "123456",
+        "curso_id": "c1"
+      },
+      "created_at": "2026-09-22T10:30:00"
+    },
+    "sala_r1": {
+      "id": "sala_r1",
+      "type": "sala",
+      "properties": {
+        "id": "r1",
+        "nome": "Sala 101",
+        "capacidade": 30
+      },
+      "created_at": "2026-09-22T10:30:00"
+    },
+    "horario_h1": {
+      "id": "horario_h1",
+      "type": "horario",
+      "properties": {
+        "id": "h1",
+        "periodo": "2026.1",
+        "dia": "Segunda",
+        "hora_inicio": "08:00",
+        "hora_fim": "10:00"
+      },
+      "created_at": "2026-09-22T10:30:00"
+    }
+  },
+  "edges": [
+    {
+      "from": "disciplina_d1",
+      "to": "curso_c1",
+      "relation": "pertence_a",
+      "properties": {},
+      "created_at": "2026-09-22T10:30:00"
+    },
+    {
+      "from": "professor_p1",
+      "to": "disciplina_d1",
+      "relation": "ministrada_por",
+      "properties": {},
+      "created_at": "2026-09-22T10:30:00"
+    },
+    {
+      "from": "disciplina_d1",
+      "to": "sala_r1",
+      "relation": "tem_horario",
+      "properties": {},
+      "created_at": "2026-09-22T10:30:00"
+    },
+    {
+      "from": "disciplina_d1",
+      "to": "horario_h1",
+      "relation": "tem_horario",
+      "properties": {},
+      "created_at": "2026-09-22T10:30:00"
+    }
+  ]
+}
