@@ -1,0 +1,349 @@
+:root {
+  --ink: #173c3a;
+  --muted: #66817c;
+  --paper: #f4f7f1;
+  --line: #dce8df;
+  --teal: #1c7770;
+  --coral: #df705b;
+  --gold: #dda83d;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 85% 0%, #dcefe5 0, transparent 32%), var(--paper);
+  font-family: "Manrope", sans-serif;
+}
+.shell {
+  width: min(1420px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 28px 0;
+}
+.topbar,
+.intro,
+.panel-heading,
+.panel-footer,
+.lesson-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  color: white;
+  background: var(--teal);
+  border-radius: 9px;
+}
+.brand-accent {
+  color: var(--coral);
+}
+.topbar-meta {
+  color: var(--muted);
+  font:
+    11px "DM Mono",
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  background: #71b79a;
+  border-radius: 50%;
+}
+.intro {
+  padding: 78px 0 34px;
+  align-items: end;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--coral);
+  font:
+    11px "DM Mono",
+    monospace;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(38px, 5vw, 68px);
+  line-height: 0.98;
+  letter-spacing: -3px;
+}
+.subtitle {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.period-pill {
+  padding: 14px 19px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+}
+.period-pill span,
+.course-code span {
+  display: block;
+  color: var(--muted);
+  font:
+    10px "DM Mono",
+    monospace;
+  letter-spacing: 1.2px;
+}
+.period-pill strong {
+  display: block;
+  margin-top: 4px;
+  font:
+    18px "DM Mono",
+    monospace;
+}
+.stats {
+  display: flex;
+  align-items: stretch;
+  border-block: 1px solid var(--line);
+}
+.stat,
+.course-code {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 19px 28px 19px 0;
+  margin-right: 28px;
+  border-right: 1px solid var(--line);
+}
+.stat strong,
+.stat span {
+  display: block;
+}
+.stat strong {
+  font-size: 22px;
+  line-height: 1;
+}
+.stat div span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stat-icon {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  border-radius: 9px;
+  font-size: 17px;
+}
+.teal {
+  color: var(--teal);
+  background: #d7eeea;
+}
+.coral {
+  color: var(--coral);
+  background: #f7dfd8;
+}
+.gold {
+  color: #9d701f;
+  background: #f7e9c8;
+}
+.course-code {
+  margin-left: auto;
+  margin-right: 0;
+  padding-right: 0;
+  border: 0;
+  display: block;
+}
+.course-code strong {
+  display: block;
+  margin-top: 5px;
+  font:
+    13px "DM Mono",
+    monospace;
+}
+.schedule-panel {
+  margin-top: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: 0 18px 50px rgba(32, 78, 67, 0.07);
+}
+.panel-heading {
+  padding: 28px 30px 22px;
+}
+.panel-heading h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.7px;
+}
+.lesson-count {
+  padding: 7px 11px;
+  color: var(--teal);
+  background: #e0f0e9;
+  border-radius: 20px;
+  font:
+    11px "DM Mono",
+    monospace;
+}
+.table-wrap {
+  overflow-x: auto;
+}
+.schedule-grid {
+  display: grid;
+  min-width: 900px;
+  grid-template-columns: 86px repeat(5, minmax(150px, 1fr));
+  border-top: 1px solid var(--line);
+}
+.schedule-grid > div {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.time-head,
+.day-head {
+  padding: 15px 12px;
+  color: var(--muted);
+  background: #f4f8f3;
+  font:
+    10px "DM Mono",
+    monospace;
+  letter-spacing: 0.8px;
+}
+.day-head {
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 11px;
+}
+.time-cell {
+  height: 112px;
+  padding: 14px 10px;
+  color: var(--muted);
+  font:
+    11px "DM Mono",
+    monospace;
+}
+.time-cell small {
+  display: block;
+  margin-top: 8px;
+  color: #a4b6ad;
+  font-size: 8px;
+}
+.lesson-cell {
+  height: 112px;
+  padding: 8px;
+  background: rgba(249, 252, 248, 0.45);
+}
+.lesson-card {
+  height: 100%;
+  padding: 11px 12px;
+  border-left: 3px solid var(--coral);
+  border-radius: 7px;
+  background: #fff8f1;
+  box-shadow: 0 4px 11px rgba(96, 61, 37, 0.07);
+}
+.lesson-top {
+  gap: 5px;
+}
+.lesson-code {
+  color: var(--coral);
+  font:
+    10px "DM Mono",
+    monospace;
+  font-weight: 500;
+}
+.lesson-time {
+  color: var(--muted);
+  font:
+    9px "DM Mono",
+    monospace;
+  white-space: nowrap;
+}
+.lesson-card h3 {
+  margin: 12px 0 5px;
+  font-size: 14px;
+  letter-spacing: -0.4px;
+}
+.lesson-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.room {
+  margin-top: 9px;
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 600;
+}
+.panel-footer {
+  padding: 17px 30px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+  background: var(--coral);
+  border-radius: 50%;
+}
+.updated {
+  font:
+    10px "DM Mono",
+    monospace;
+}
+@media (max-width: 700px) {
+  .shell {
+    width: min(100% - 32px, 600px);
+    padding-top: 18px;
+  }
+  .topbar-meta {
+    display: none;
+  }
+  .intro {
+    display: block;
+    padding-top: 60px;
+  }
+  .period-pill {
+    display: inline-block;
+    margin-top: 24px;
+  }
+  .stats {
+    overflow-x: auto;
+  }
+  .stat,
+  .course-code {
+    flex: 0 0 auto;
+    margin-right: 20px;
+    padding-right: 20px;
+  }
+  .course-code {
+    margin-left: 0;
+  }
+  .panel-heading {
+    padding-inline: 18px;
+  }
+  .panel-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+    padding-inline: 18px;
+  }
+  .updated {
+    font-size: 9px;
+  }
+}
