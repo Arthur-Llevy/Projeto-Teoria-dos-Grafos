@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Grade de horários | {{ course.nome or "Curso" }}</title>
+    <title>Organizador de Horários | {{ course.nome }}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,55 +12,363 @@
     />
     <link
       rel="stylesheet"
-      href="{{ url_for('static', filename='style.css') }}"
+      href="{{ url_for('static', filename='style.css', v=4) }}"
     />
   </head>
   <body>
-    <main class="shell">
-      <section class="schedule-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Visão semanal</p>
-            <h2>Programação das aulas</h2>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <rect
+              x="2.5"
+              y="3.5"
+              width="15"
+              height="14"
+              rx="2"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M6 2.5v3M14 2.5v3M3 7.5h14M6 10.5h2M11 10.5h2M6 14h2M11 14h2"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Visualização Completa da Grade Semanal</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('nova_disciplina') }}">
+        <span aria-hidden="true">+</span> Nova disciplina
+      </a>
+    </header>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Filtros da grade">
+        <div class="sidebar-controls">
+          <h2 class="section-label">Selecionar professor</h2>
+          <label class="field-label" for="period-filter">
+            <span aria-hidden="true">▣</span> Período
+          </label>
+          <select id="period-filter" class="filter-select">
+            <option value="all">Todos os períodos</option>
+            {% for period in
+            disciplines|map(attribute='dis_periodo')|unique|sort %}
+            <option value="{{ period }}">{{ period }}º período</option>
+            {% endfor %}
+          </select>
+
+          <label class="field-label" for="professor-filter">
+            <span aria-hidden="true">♙</span> Professor
+          </label>
+          <select id="professor-filter" class="filter-select">
+            <option value="all">Todos os professores</option>
+            {% for professor in professors %}
+            <option value="{{ professor.pro_id }}">
+              {{ professor.pro_nome|title }}
+            </option>
+            {% endfor %}
+          </select>
+
+          <section class="filter-note" aria-live="polite">
+            <span class="info-icon" aria-hidden="true">i</span>
+            <p id="filter-message">
+              Você está visualizando a grade completa para todos os professores
+              e períodos.
+            </p>
+            <button
+              id="details-toggle"
+              class="details-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="advanced-filters"
+            >
+              Gerenciar Filtros Detalhados
+            </button>
+          </section>
+
+          <section id="advanced-filters" class="advanced-filters" hidden>
+            <label class="field-label" for="discipline-search"
+              >Buscar disciplina</label
+            >
+            <input
+              id="discipline-search"
+              class="search-input"
+              type="search"
+              placeholder="Nome ou código"
+            />
+            <label class="check-option">
+              <input id="elective-filter" type="checkbox" />
+              <span>Somente eletivas</span>
+            </label>
+            <button id="clear-filters" class="clear-filters" type="button">
+              Limpar filtros
+            </button>
+          </section>
+
+          <section class="weekday-stats" aria-label="Aulas por dia">
+            {% set max_day_count = day_counts.values()|max %} {% for day in days
+            %}
+            <div
+              class="weekday-stat"
+              title="{{ day_counts[day] }} encontros na {{ day }}"
+            >
+              <span>{{ day[:3] }}</span>
+              <div class="stat-track">
+                <i
+                  style="--bar-width: {{ (day_counts[day] / max_day_count * 100)|round }}%"
+                ></i>
+              </div>
+              <small class="day-count" data-day-count="{{ day }}"
+                >{{ day_counts[day] }}</small
+              >
+            </div>
+            {% endfor %}
+          </section>
+        </div>
+
+        <section class="discipline-section">
+          <div class="discipline-heading">
+            <h2 class="section-label">Todas as disciplinas</h2>
+            <span>{{ disciplines|length }}</span>
           </div>
-          <span class="lesson-count"
-            >{{ entries|length }} aula{% if entries|length != 1 %}s{% endif
-            %}</span
-          >
+          <div class="discipline-list" id="discipline-list">
+            {% for discipline in disciplines %}
+            <button
+              class="discipline-item color-{{ discipline.dis_id % 6 }}"
+              type="button"
+              data-discipline-id="{{ discipline.dis_id }}"
+              data-period="{{ discipline.dis_periodo }}"
+              data-professor="{{ discipline.professor_id if discipline.professor_id is not none else '' }}"
+              data-elective="{{ discipline.dis_eh_eletiva }}"
+              data-search="{{ (discipline.dis_codigo ~ ' ' ~ discipline.dis_descricao ~ ' ' ~ (discipline.professor or ''))|lower }}"
+              aria-pressed="false"
+            >
+              <span class="discipline-code">{{ discipline.dis_codigo }}</span>
+              <strong>{{ discipline.dis_descricao|title }}</strong>
+              <small
+                >{{ discipline.professor|title if discipline.professor else
+                "Professor não informado" }} · {{ discipline.dis_periodo }}º
+                período</small
+              >
+            </button>
+            {% endfor %}
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        {% if discipline_created %}
+        <p class="registration-success" role="status">
+          Disciplina cadastrada com sucesso.
+        </p>
+        {% endif %}
+        <div class="workspace-summary" id="workspace-summary">
+          Grade completa · {{ disciplines|length }} disciplinas · {{
+          entries|length }} encontros semanais
         </div>
         <div class="table-wrap">
-          <div class="schedule-grid">
-            <div class="time-head">HORÁRIO</div>
-            {% for day in ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] %}
-            <div class="day-head">{{ day }}</div>
-            {% endfor %} {% for slot in [ {"start": "07:10", "label": "07:10 —
-            08:50"}, {"start": "08:50", "label": "08:50 — 10:30"}, {"start":
-            "10:30", "label": "10:30 — 12:10"}, {"start": "12:10", "label":
-            "12:10 — 13:50"}, {"start": "13:50", "label": "13:50 — 15:30"} ] %}
-            <div class="time-cell">{{ slot.label }}</div>
-            {% for day in ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] %}
-            <div class="lesson-cell">
-              {% for entry in entries if entry.day == day and entry.start ==
-              slot.start %}
-              <article class="lesson-card">
-                <div class="lesson-top">
-                  <span class="lesson-code">{{ entry.discipline.codigo }}</span
-                  ><span class="lesson-time"
-                    >{{ entry.start }} — {{ entry.end }}</span
-                  >
-                </div>
-                <h3>{{ entry.discipline.nome }}</h3>
-                <p>{{ entry.professor.nome or "Professor não informado" }}</p>
-                <div class="room">
-                  ⌂ {{ entry.room.nome or "Sala não informada" }}
-                </div>
+          <div
+            class="schedule-grid"
+            style="--slot-count: {{ time_slots|length }}"
+          >
+            <div class="time-head" style="grid-column: 1; grid-row: 1">
+              Horário
+            </div>
+            {% for day in days %}
+            <div
+              class="day-head"
+              style="grid-column: {{ loop.index + 1 }}; grid-row: 1"
+            >
+              {{ day }}
+            </div>
+            {% endfor %} {% for slot in time_slots %}
+            <div
+              class="time-cell"
+              style="grid-column: 1; grid-row: {{ loop.index + 1 }}; font-size: 12px"
+            >
+              <strong>{{ slot.start }}</strong
+              ><small style="font-size: 10px">{{ slot.end }}</small>
+            </div>
+            {% endfor %} {% for day in days %}
+            <div
+              class="day-track"
+              data-day="{{ day }}"
+              style="grid-column: {{ loop.index + 1 }}; grid-row: 2 / span {{ time_slots|length }}"
+            >
+              {% for entry in entries if entry.day == day %}
+              <article
+                class="lesson-card color-{{ entry.color }}"
+                data-day="{{ entry.day }}"
+                data-row="{{ entry.row }}"
+                data-period="{{ entry.period }}"
+                data-professor="{{ entry.professor.id }}"
+                data-discipline-id="{{ entry.discipline.id }}"
+                data-elective="{{ 1 if entry.discipline.eh_eletiva else 0 }}"
+                data-search="{{ (entry.discipline.nome ~ ' ' ~ entry.discipline.codigo ~ ' ' ~ entry.professor.nome)|lower }}"
+                title="{{ entry.discipline.nome }} · {{ entry.start }}–{{ entry.end }} · {{ entry.professor.nome }} · {{ entry.room.nome }}"
+                style="top: {{ entry.row * 68 + 3 }}px; left: calc({{ entry.lane / entry.lane_count * 100 }}% + 3px); width: calc({{ 100 / entry.lane_count }}% - 6px); height: {{ entry.span * 68 - 6 }}px"
+              >
+                <span class="lesson-code">{{ entry.discipline.codigo }}</span>
+                <strong style="font-size: 16px"
+                  >{{ entry.discipline.nome|title }}</strong
+                >
+                <span class="lesson-professor" style="font-size: 14px"
+                  >Prof. {{ entry.professor.nome|title }}</span
+                >
+                <span class="lesson-meta" style="font-size: 12px"
+                  ><b>{{ entry.period }}º período</b
+                  ><i style="font-size: 12px"
+                    >{{ entry.discipline.carga_horaria }}h</i
+                  ></span
+                >
               </article>
               {% endfor %}
             </div>
-            {% endfor %} {% endfor %}
+            {% endfor %}
           </div>
         </div>
-      </section>
-    </main>
+      </main>
+    </div>
+
+    <script>
+      const periodFilter = document.querySelector("#period-filter");
+      const professorFilter = document.querySelector("#professor-filter");
+      const searchInput = document.querySelector("#discipline-search");
+      const electiveFilter = document.querySelector("#elective-filter");
+      const detailsToggle = document.querySelector("#details-toggle");
+      const advancedFilters = document.querySelector("#advanced-filters");
+      const disciplineItems = [
+        ...document.querySelectorAll(".discipline-item"),
+      ];
+      const lessons = [...document.querySelectorAll(".lesson-card")];
+      let selectedDiscipline = null;
+
+      function applyFilters() {
+        const period = periodFilter.value;
+        const professor = professorFilter.value;
+        const query = searchInput.value.trim().toLocaleLowerCase("pt-BR");
+        const electivesOnly = electiveFilter.checked;
+        let visibleLessons = 0;
+        const visibleByDay = Object.create(null);
+
+        for (const lesson of lessons) {
+          const visible =
+            (period === "all" || lesson.dataset.period === period) &&
+            (professor === "all" || lesson.dataset.professor === professor) &&
+            (!query || lesson.dataset.search.includes(query)) &&
+            (!electivesOnly || lesson.dataset.elective === "1") &&
+            (!selectedDiscipline ||
+              lesson.dataset.disciplineId === selectedDiscipline);
+          lesson.hidden = !visible;
+          if (visible) {
+            visibleLessons += 1;
+            visibleByDay[lesson.dataset.day] =
+              (visibleByDay[lesson.dataset.day] || 0) + 1;
+          }
+        }
+
+        const visibleGroups = new Map();
+        for (const lesson of lessons) {
+          if (lesson.hidden) continue;
+          const key = `${lesson.dataset.day}:${lesson.dataset.row}`;
+          if (!visibleGroups.has(key)) visibleGroups.set(key, []);
+          visibleGroups.get(key).push(lesson);
+        }
+        for (const group of visibleGroups.values()) {
+          const laneWidth = 100 / group.length;
+          group.forEach((lesson, lane) => {
+            lesson.style.left = `calc(${lane * laneWidth}% + 3px)`;
+            lesson.style.width = `calc(${laneWidth}% - 6px)`;
+          });
+        }
+
+        for (const item of disciplineItems) {
+          const visible =
+            (period === "all" || item.dataset.period === period) &&
+            (!query || item.dataset.search.includes(query)) &&
+            (!electivesOnly || item.dataset.elective === "1") &&
+            (professor === "all" || item.dataset.professor === professor) &&
+            (!selectedDiscipline ||
+              item.dataset.disciplineId === selectedDiscipline);
+          item.hidden = !visible;
+          item.classList.toggle(
+            "is-selected",
+            item.dataset.disciplineId === selectedDiscipline,
+          );
+          item.setAttribute(
+            "aria-pressed",
+            item.dataset.disciplineId === selectedDiscipline ? "true" : "false",
+          );
+        }
+
+        for (const count of document.querySelectorAll("[data-day-count]")) {
+          count.textContent = visibleByDay[count.dataset.day] || 0;
+        }
+        const maxVisibleDay = Math.max(1, ...Object.values(visibleByDay));
+        for (const stat of document.querySelectorAll(".weekday-stat")) {
+          const count =
+            visibleByDay[stat.querySelector("[data-day-count]").dataset.day] ||
+            0;
+          stat
+            .querySelector(".stat-track i")
+            .style.setProperty(
+              "--bar-width",
+              `${(count / maxVisibleDay) * 100}%`,
+            );
+        }
+        document.querySelector("#filter-message").textContent =
+          period === "all" &&
+          professor === "all" &&
+          !query &&
+          !electivesOnly &&
+          !selectedDiscipline
+            ? "Você está visualizando a grade completa para todos os professores e períodos."
+            : `${visibleLessons} encontros correspondem aos filtros selecionados.`;
+        document.querySelector("#workspace-summary").textContent =
+          `${visibleLessons === lessons.length ? "Grade completa" : "Grade filtrada"} · ${visibleLessons} encontros visíveis · {{ disciplines|length }} disciplinas`;
+      }
+
+      detailsToggle.addEventListener("click", () => {
+        advancedFilters.hidden = !advancedFilters.hidden;
+        detailsToggle.setAttribute(
+          "aria-expanded",
+          String(!advancedFilters.hidden),
+        );
+        detailsToggle.textContent = advancedFilters.hidden
+          ? "Gerenciar Filtros Detalhados"
+          : "Ocultar Filtros Detalhados";
+      });
+      for (const control of [
+        periodFilter,
+        professorFilter,
+        searchInput,
+        electiveFilter,
+      ]) {
+        control.addEventListener("input", applyFilters);
+        control.addEventListener("change", applyFilters);
+      }
+      for (const item of disciplineItems) {
+        item.addEventListener("click", () => {
+          selectedDiscipline =
+            selectedDiscipline === item.dataset.disciplineId
+              ? null
+              : item.dataset.disciplineId;
+          applyFilters();
+        });
+      }
+      document.querySelector("#clear-filters").addEventListener("click", () => {
+        periodFilter.value = "all";
+        professorFilter.value = "all";
+        searchInput.value = "";
+        electiveFilter.checked = false;
+        selectedDiscipline = null;
+        applyFilters();
+      });
+    </script>
   </body>
 </html>
