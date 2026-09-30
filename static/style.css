@@ -340,6 +340,11 @@ button {
   font-weight: 500;
   line-height: 1;
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .registration-success {
   margin: 10px 16px 0;
   padding: 9px 12px;
@@ -476,6 +481,53 @@ button {
 }
 .registration-submit:hover {
   background: #1e59cc;
+}
+.course-list-main {
+  width: min(100% - 32px, 850px);
+}
+.course-table-panel {
+  overflow: hidden;
+  border: 1px solid #e2e7ee;
+  border-radius: 7px;
+  background: #fff;
+}
+.course-table-wrap {
+  overflow-x: auto;
+}
+.course-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #34445a;
+  font-size: 12px;
+  text-align: left;
+}
+.course-table th,
+.course-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid #edf0f4;
+}
+.course-table th {
+  color: #75849a;
+  background: #f8fafd;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.course-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.course-table td:first-child {
+  width: 72px;
+  color: #8290a3;
+  font-family: "DM Mono", monospace;
+}
+.course-empty-state {
+  margin: 0;
+  padding: 24px;
+  color: #8290a3;
+  font-size: 12px;
+  text-align: center;
 }
 .discipline-item small {
   overflow: hidden;
@@ -738,6 +790,14 @@ button {
 }
 
 @media (max-width: 520px) {
+  .topbar-actions {
+    gap: 5px;
+  }
+  .topbar-actions .new-discipline-link {
+    gap: 4px;
+    padding-inline: 7px;
+    font-size: 9px;
+  }
   .registration-main {
     margin-block: 26px;
   }

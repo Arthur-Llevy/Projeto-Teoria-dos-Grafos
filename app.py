@@ -1,15 +1,25 @@
 from flask import Flask, redirect, render_template, request, url_for
 from src.api.health import health_bp
-from src.api.graph import graph_bp               
+from src.api.graph import graph_bp
+from src.api.courses import courses_bp
+from src.database import CourseRepository
 from src.graph.graph_db import GraphDatabase
-from src.graph.sqlite_loader import load_from_sqlite  
+from src.graph.sqlite_loader import load_from_sqlite
 from pathlib import Path
+import os
 import sqlite3
 
 app = Flask(__name__)
-
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "grade_horaria.db"
+database_path = os.getenv(
+    "GRADE_DATABASE_PATH",
+    str(BASE_DIR.parent / "grade_horaria.db"),
+)
+course_repository = CourseRepository(database_path)
+course_repository.initialize()
+app.extensions["course_repository"] = course_repository
+
+DB_PATH = Path(database_path)
 SAMPLE_GRAPH = BASE_DIR / "src" / "graph" / "sample_graph_data.json"
 
 graph_db = GraphDatabase()
@@ -24,11 +34,11 @@ app.extensions["graph_db"] = graph_db
 
 app.register_blueprint(health_bp)
 app.register_blueprint(graph_bp)
+app.register_blueprint(courses_bp)
 
 @app.route("/")
 def index():
-    database_path = Path(__file__).resolve().parent / "grade_horaria.db"
-    connection = sqlite3.connect(database_path)
+    connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     rows = connection.execute("""
         SELECT g.gra_semestre, h.hor_dia_semana, h.hor_hora_inicio,

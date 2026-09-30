@@ -9,5 +9,8 @@ services:
       - FLASK_ENV=production
       - FLASK_DEBUG=0
       - FLASK_APP=app:app
+      - GRADE_DATABASE_PATH=/app/grade_horaria.db
+    volumes:
+      - ../grade_horaria.db:/app/grade_horaria.db
     command: gunicorn --bind 0.0.0.0:5000 --workers 4 app:app
     restart: unless-stopped

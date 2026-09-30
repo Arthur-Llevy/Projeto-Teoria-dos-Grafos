@@ -42,9 +42,14 @@
           <small>Visualização Completa da Grade Semanal</small>
         </span>
       </a>
-      <a class="new-discipline-link" href="{{ url_for('nova_disciplina') }}">
-        <span aria-hidden="true">+</span> Nova disciplina
-      </a>
+      <nav class="topbar-actions" aria-label="Ações">
+        <a class="new-discipline-link" href="{{ url_for('courses.courses') }}">
+          Cursos
+        </a>
+        <a class="new-discipline-link" href="{{ url_for('nova_disciplina') }}">
+          <span aria-hidden="true">+</span> Nova disciplina
+        </a>
+      </nav>
     </header>
 
     <div class="app-shell">
