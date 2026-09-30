@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cursos | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=5) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <rect
+              x="2.5"
+              y="3.5"
+              width="15"
+              height="14"
+              rx="2"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M6 2.5v3M14 2.5v3M3 7.5h14M6 10.5h2M11 10.5h2M6 14h2M11 14h2"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro e visualização</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('courses.new_course') }}">
+        <span aria-hidden="true">+</span> Novo curso
+      </a>
+    </header>
+
+    <main class="registration-main course-list-main">
+      <a class="registration-back" href="/">← Voltar para a grade</a>
+      <div class="registration-heading">
+        <h1>Cursos</h1>
+        <p>Consulte os cursos cadastrados ou adicione um novo.</p>
+      </div>
+
+      {% if created %}
+      <p class="registration-success" role="status">
+        Curso cadastrado com sucesso.
+      </p>
+      {% endif %}
+
+      <section class="course-table-panel" aria-label="Cursos cadastrados">
+        {% if courses %}
+        <div class="course-table-wrap">
+          <table class="course-table">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Nome do curso</th>
+                <th scope="col">Descrição</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for course in courses %}
+              <tr>
+                <td>{{ course.id }}</td>
+                <td>{{ course.nome }}</td>
+                <td>{{ course.descricao or "—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="course-empty-state">Ainda não há cursos cadastrados.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
