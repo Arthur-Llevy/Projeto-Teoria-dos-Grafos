@@ -7,11 +7,11 @@ from src.graph.models.relation_type import RelationType
 from src.graph.models.sala import Sala
 
 __all__ = [
-    "Disciplina",
     "Curso",
+    "Disciplina",
     "Horario",
+    "Professor",
+    "NodeType",
     "RelationType",
     "Sala",
-    "NodeType",
-    "Professor"
 ]
