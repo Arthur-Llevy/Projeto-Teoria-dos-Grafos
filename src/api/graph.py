@@ -1,5 +1,10 @@
 from collections import defaultdict
-from flask import Blueprint, jsonify, current_app, abort
+from flask import Blueprint, jsonify, current_app, abort, request
+import sqlite3
+
+from src.database import GradeAlreadyExistsError
+from src.graph.graph_db import GraphDatabase
+from src.graph.sqlite_loader import load_from_sqlite
 
 graph_bp = Blueprint("graph", __name__, url_prefix="/graph")
 
@@ -130,10 +135,72 @@ def disciplina_detalhe(dis_id: int):
 
 @graph_bp.post("/reload")
 def reload():
-    from src.graph.sqlite_loader import load_from_sqlite
-    from pathlib import Path
-    g = _g()
-    g.clear()
-    db = Path(current_app.root_path) / "grade_horaria.db"
+    g = GraphDatabase()
+    db = current_app.extensions["grade_repository"].database_path
     ok = load_from_sqlite(g, db)
+    if ok:
+        current_app.extensions["graph_db"] = g
     return jsonify({"ok": ok}), (200 if ok else 500)
+
+
+@graph_bp.post("/grade/instanciar")
+def instantiate_grade():
+    """Persist timetable assignments supplied by the graph or frontend."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"erro": "Envie um objeto JSON com o campo semestre."}), 400
+
+    semester = payload.get("semestre")
+    if not isinstance(semester, str) or not semester.strip():
+        return jsonify({"erro": "O campo semestre é obrigatório."}), 400
+
+    replace_existing = payload.get("substituir", False)
+    if not isinstance(replace_existing, bool):
+        return jsonify({"erro": "O campo substituir deve ser booleano."}), 400
+
+    assignments = payload.get("alocacoes")
+    if not isinstance(assignments, list) or not assignments:
+        return jsonify({
+            "erro": "Envie ao menos uma alocação com alo_id e horario_id.",
+        }), 400
+
+    try:
+        persistence = current_app.extensions["grade_repository"].replace_semester(
+            semester,
+            assignments,
+            replace_existing=replace_existing,
+        )
+    except GradeAlreadyExistsError as exc:
+        return jsonify({
+            "erro": str(exc),
+            "instrucao": "Envie substituir=true para substituir a grade desse semestre.",
+        }), 409
+    except ValueError as exc:
+        return jsonify({"erro": str(exc)}), 422
+    except sqlite3.IntegrityError as exc:
+        current_app.logger.exception("Falha de integridade ao persistir a grade")
+        return jsonify({"erro": f"A grade referencia dados inválidos: {exc}"}), 422
+    except sqlite3.Error:
+        current_app.logger.exception("Falha SQLite ao persistir a grade")
+        return jsonify({"erro": "Não foi possível persistir a grade no SQLite."}), 500
+
+    # Atualiza a representação em memória para que as rotas de consulta leiam
+    # as mesmas associações que acabaram de ser gravadas.
+    updated_graph = GraphDatabase()
+    load_ok = load_from_sqlite(
+        updated_graph,
+        current_app.extensions["grade_repository"].database_path,
+    )
+    if not load_ok:
+        current_app.logger.error("Grade persistida, mas o grafo não foi recarregado")
+        return jsonify({
+            "erro": "A grade foi salva, mas o grafo em memória não foi recarregado.",
+            **persistence,
+        }), 500
+    current_app.extensions["graph_db"] = updated_graph
+
+    return jsonify({
+        "ok": True,
+        "semestre": semester.strip(),
+        **persistence,
+    }), 201
