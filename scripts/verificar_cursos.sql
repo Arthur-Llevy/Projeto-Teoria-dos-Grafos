@@ -1,6 +1,6 @@
 -- Verifica os cursos persistidos pela rota POST /courses.
 -- Execute a partir do diretório do repositório, por exemplo:
--- sqlite3 ../grade_horaria.db < scripts/verificar_cursos.sql
+-- sqlite3 src/database/grade_horaria.db < scripts/verificar_cursos.sql
 
 .headers on
 .mode column

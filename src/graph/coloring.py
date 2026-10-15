@@ -1,15 +1,11 @@
-"""Color graph allocation vertices and map colors to real timetable slots.
+"""Color timetable meetings loaded from the application's SQLite database.
 
-Each allocation is expanded into one vertex per 30 hours of discipline
-workload. Each color maps to two consecutive 50-minute ``hor_id`` values.
-
-For a universal course timetable, the regular full-profile constraint is
-covered by connecting required disciplines in the same course and ideal term.
+The SQLite database remains the source of truth. The graph is its in-memory
+representation, used here to build and solve the allocation conflict graph.
+Each 15 hours of discipline workload represents one weekly 50-minute meeting.
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
-from math import ceil
 from typing import Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from src.graph.graph_db import GraphDatabase
@@ -18,18 +14,7 @@ VERTEX_TYPE = "alocacao"
 DISCIPLINE_RELATION = "MINISTRA"
 PROFESSOR_RELATION = "ALOCADO_EM"
 SLOT_NODE_TYPE = "horario"
-HOURS_PER_VERTEX = 30
-MAX_PROFESSOR_SEMESTER_HOURS = 240
-
-
-@dataclass(frozen=True)
-class SlotPair:
-    """Two adjacent 50-minute slots representing one 30-hour workload unit."""
-
-    day: str
-    start: str
-    end: str
-    horario_ids: Tuple[int, int]
+HOURS_PER_MEETING = 15
 
 
 def _discipline_for_allocation(
@@ -93,68 +78,29 @@ def _discipline_workload(discipline: Dict) -> int:
         raise ValueError(
             f"Carga horária inválida na disciplina {discipline['id']}."
         ) from exc
-    if workload <= 0:
+    if workload <= 0 or workload % HOURS_PER_MEETING:
         raise ValueError(
-            f"A disciplina {discipline['id']} precisa ter carga horária positiva."
+            f"A carga horária da disciplina {discipline['id']} deve ser positiva "
+            f"e múltipla de {HOURS_PER_MEETING}h para representar aulas de 50 minutos."
         )
     return workload
 
 
-def _vertices_by_allocation(graph: GraphDatabase) -> Dict[str, list[str]]:
-    """Expand each allocation into vertices of at most 30 discipline hours."""
-    vertices: Dict[str, list[str]] = {}
+def _vertices_by_allocation(graph: GraphDatabase) -> Dict[str, List[str]]:
+    """Create one vertex for every 50-minute meeting in a weekly schedule."""
+    vertices: Dict[str, List[str]] = {}
     for allocation in graph.get_nodes_by_type(VERTEX_TYPE):
         discipline = _discipline_for_allocation(graph, allocation)
         if discipline is None:
             raise ValueError(
                 f"A alocação {allocation['id']} não está vinculada a uma disciplina."
             )
-
-        workload = _discipline_workload(discipline)
-        count = ceil(workload / HOURS_PER_VERTEX)
+        meeting_count = _discipline_workload(discipline) // HOURS_PER_MEETING
         vertices[allocation["id"]] = [
-            f"{allocation['id']}#30h:{index}"
-            for index in range(1, count + 1)
+            f"{allocation['id']}#50min:{index}"
+            for index in range(1, meeting_count + 1)
         ]
     return vertices
-
-
-def validate_professor_workload(
-    graph: GraphDatabase,
-    max_hours: int = MAX_PROFESSOR_SEMESTER_HOURS,
-) -> Dict[str, int]:
-    """Reject graphs where a professor exceeds the semester workload in the PDF."""
-    if max_hours <= 0:
-        raise ValueError("max_hours deve ser maior que zero.")
-
-    hours_by_professor: Dict[str, int] = defaultdict(int)
-    for allocation in graph.get_nodes_by_type(VERTEX_TYPE):
-        professor_id = _professor_for_allocation(graph, allocation)
-        if professor_id is None:
-            continue
-
-        discipline = _discipline_for_allocation(graph, allocation)
-        if discipline is None:
-            raise ValueError(
-                f"A alocação {allocation['id']} não está vinculada a uma disciplina."
-            )
-        hours_by_professor[professor_id] += _discipline_workload(discipline)
-
-    overloaded = {
-        professor_id: hours
-        for professor_id, hours in hours_by_professor.items()
-        if hours > max_hours
-    }
-    if overloaded:
-        details = ", ".join(
-            f"{professor_id}: {hours}h"
-            for professor_id, hours in sorted(overloaded.items())
-        )
-        raise ValueError(
-            f"Carga horária docente acima do limite de {max_hours}h por semestre: "
-            f"{details}."
-        )
-    return dict(hours_by_professor)
 
 
 def _connect_group(adjacency: Dict[str, Set[str]], vertices: Iterable[str]) -> None:
@@ -166,29 +112,30 @@ def _connect_group(adjacency: Dict[str, Set[str]], vertices: Iterable[str]) -> N
                 adjacency[other].add(vertex)
 
 
-def build_conflict_graph(
-    graph: GraphDatabase,
-) -> Dict[str, Set[str]]:
-    """Build an adjacency list for the hard constraints.
+def build_conflict_graph(graph: GraphDatabase) -> Dict[str, Set[str]]:
+    """Build conflicts for teachers, required course periods, and class meetings.
 
-    Vertices from the same professor, required curriculum period, or discipline
-    are connected and therefore need different colors. In a universal course
-    timetable, required disciplines in the same course and ideal term model the
-    regular full profile.
+    Meetings belonging to one allocation must use distinct periods. Grouping by
+    allocation is sufficient for the same-class constraint; grouping every row
+    with the same discipline ID would also conflict separate offerings of that
+    discipline and duplicate conflicts already covered by course and period.
     """
     vertices_by_allocation = _vertices_by_allocation(graph)
-    adjacency: Dict[str, Set[str]] = {
-        vertex: set()
+    vertices = {
+        vertex
         for allocation_vertices in vertices_by_allocation.values()
         for vertex in allocation_vertices
     }
-    curricular_groups: Dict[Tuple[str, str], list[str]] = defaultdict(list)
-    professor_groups: Dict[str, list[str]] = defaultdict(list)
-    discipline_groups: Dict[str, list[str]] = defaultdict(list)
+    adjacency: Dict[str, Set[str]] = {vertex: set() for vertex in vertices}
+    curricular_groups: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+    professor_groups: Dict[str, List[str]] = defaultdict(list)
 
     for allocation in graph.get_nodes_by_type(VERTEX_TYPE):
         allocation_id = allocation["id"]
         allocation_vertices = vertices_by_allocation[allocation_id]
+        # Each weekly meeting of the same offering is a different period.
+        _connect_group(adjacency, allocation_vertices)
+
         discipline = _discipline_for_allocation(graph, allocation)
         properties = discipline["properties"]
         is_elective = properties.get(
@@ -201,11 +148,6 @@ def build_conflict_graph(
                 allocation_vertices
             )
 
-        discipline_id = properties.get(
-            "dis_id", properties.get("id", discipline["id"])
-        )
-        discipline_groups[str(discipline_id)].extend(allocation_vertices)
-
         professor_id = _professor_for_allocation(graph, allocation)
         if professor_id is not None:
             professor_groups[professor_id].extend(allocation_vertices)
@@ -214,20 +156,15 @@ def build_conflict_graph(
         _connect_group(adjacency, group)
     for group in professor_groups.values():
         _connect_group(adjacency, group)
-    for group in discipline_groups.values():
-        _connect_group(adjacency, group)
-
     return adjacency
 
 
 def validate_coloring(
-    adjacency: Dict[str, Set[str]],
-    colors: Dict[str, int],
-    max_parallel_classes: Optional[int] = None,
+    adjacency: Dict[str, Set[str]], colors: Dict[str, int]
 ) -> None:
     missing = set(adjacency) - set(colors)
     if missing:
-        raise ValueError(f"Alocações sem cor: {', '.join(sorted(missing))}")
+        raise ValueError(f"Aulas sem cor: {', '.join(sorted(missing))}")
 
     for vertex, neighbors in adjacency.items():
         for neighbor in neighbors:
@@ -237,51 +174,23 @@ def validate_coloring(
                     f"a cor {colors[vertex]}."
                 )
 
-    if max_parallel_classes is not None:
-        classes_by_color: Dict[int, int] = defaultdict(int)
-        for color in colors.values():
-            classes_by_color[color] += 1
-        overloaded = {
-            color: count
-            for color, count in classes_by_color.items()
-            if count > max_parallel_classes
-        }
-        if overloaded:
-            color, count = min(overloaded.items())
-            raise ValueError(
-                f"A cor {color} reúne {count} alocações simultâneas, "
-                f"mas há apenas {max_parallel_classes} salas."
-            )
-
 
 def color_allocations(
-    graph: GraphDatabase,
-    max_colors: Optional[int] = None,
-    max_parallel_classes: Optional[int] = None,
+    graph: GraphDatabase, max_colors: Optional[int] = None
 ) -> Dict[str, int]:
-    """Color 30-hour workload units with DSatur and room-count capacity."""
+    """Color meeting vertices with deterministic DSatur, using DB slot count."""
     if max_colors is not None and max_colors < 1:
         raise ValueError("max_colors deve ser maior que zero.")
 
-    validate_professor_workload(graph)
     adjacency = build_conflict_graph(graph)
-    rooms = graph.get_nodes_by_type("sala")
-    if max_parallel_classes is None and rooms:
-        max_parallel_classes = len(rooms)
-    if max_parallel_classes is not None and max_parallel_classes < 1:
-        raise ValueError("max_parallel_classes deve ser maior que zero.")
-
+    available_slots = len(graph.get_nodes_by_type(SLOT_NODE_TYPE))
     if max_colors is None:
-        max_colors = _max_disjoint_pair_count(graph)
+        max_colors = available_slots
     if adjacency and max_colors < 1:
-        raise ValueError(
-            "O grafo não contém pares de horários consecutivos para agendar aulas."
-        )
+        raise ValueError("O banco não contém horários para alocar as aulas.")
 
     uncolored = set(adjacency)
     colors: Dict[str, int] = {}
-    class_count_by_color: Dict[int, int] = defaultdict(int)
-
     while uncolored:
         vertex = min(
             uncolored,
@@ -292,35 +201,31 @@ def color_allocations(
             ),
         )
         unavailable = {colors[n] for n in adjacency[vertex] if n in colors}
-        color = next((
-            candidate
-            for candidate in range(1, max_colors + 1)
-            if candidate not in unavailable
-            and (
-                max_parallel_classes is None
-                or class_count_by_color[candidate] < max_parallel_classes
-            )
-        ), None)
+        color = next(
+            (
+                candidate
+                for candidate in range(1, max_colors + 1)
+                if candidate not in unavailable
+            ),
+            None,
+        )
         if color is None:
             raise ValueError(
-                f"Não foi possível colorir o grafo com até {max_colors} pares "
-                "de horários e a capacidade de salas disponível."
+                f"Não foi possível colorir as aulas com até {max_colors} horários."
             )
-
         colors[vertex] = color
-        class_count_by_color[color] += 1
         uncolored.remove(vertex)
 
-    validate_coloring(adjacency, colors, max_parallel_classes)
+    validate_coloring(adjacency, colors)
     _store_assignments(graph, colors)
     return colors
 
 
 def _store_assignments(graph: GraphDatabase, colors: Dict[str, int]) -> None:
-    """Store initial color results on allocation nodes, grouped by allocation."""
-    grouped: Dict[str, list[Dict[str, int]]] = defaultdict(list)
+    """Store color results on allocation nodes, grouped by allocation."""
+    grouped: Dict[str, List[Dict[str, int]]] = defaultdict(list)
     for vertex, color in colors.items():
-        allocation_id = vertex.split("#30h:", maxsplit=1)[0]
+        allocation_id = vertex.split("#50min:", maxsplit=1)[0]
         grouped[allocation_id].append({"vertex": vertex, "color": color})
 
     for allocation_id, assignments in grouped.items():
@@ -329,12 +234,7 @@ def _store_assignments(graph: GraphDatabase, colors: Dict[str, int]) -> None:
                 assignment["vertex"].rsplit(":", maxsplit=1)[1]
             )
         )
-        properties = graph.nodes[allocation_id]["properties"]
-        properties["assignments"] = assignments
-        if len(assignments) == 1:
-            properties["color"] = assignments[0]["color"]
-        else:
-            properties.pop("color", None)
+        graph.nodes[allocation_id]["properties"]["assignments"] = assignments
 
 
 def _slot_sort_key(slot: Dict) -> Tuple[int, str, int, str]:
@@ -364,193 +264,229 @@ def _slot_sort_key(slot: Dict) -> Tuple[int, str, int, str]:
 
 def _minute(value: str) -> int:
     try:
-        parts = str(value).split(":")
-        hours, minutes = parts[:2]
+        hours, minutes = str(value).split(":")[:2]
         return int(hours) * 60 + int(minutes)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Horário inválido: {value!r}.") from exc
 
 
-def _slot_pairs(graph: GraphDatabase) -> List[SlotPair]:
-    slots = sorted(graph.get_nodes_by_type(SLOT_NODE_TYPE), key=_slot_sort_key)
-    by_day: Dict[str, list[Dict]] = defaultdict(list)
-    for slot in slots:
-        props = slot["properties"]
-        day = str(props.get("dia_semana", props.get("dia", "")))
-        by_day[day].append(slot)
-
-    pairs: List[SlotPair] = []
-    for day, day_slots in by_day.items():
-        day_slots.sort(key=_slot_sort_key)
-        for first, second in zip(day_slots, day_slots[1:]):
-            first_props, second_props = first["properties"], second["properties"]
-            first_end = _minute(first_props.get("hora_fim", ""))
-            second_start = _minute(second_props.get("hora_inicio", ""))
-            if first_end != second_start:
-                continue
-            ids = []
-            for slot in (first, second):
-                raw_id = slot["properties"].get(
-                    "hor_id", slot["id"].removeprefix("hor:")
-                )
-                try:
-                    ids.append(int(raw_id))
-                except (TypeError, ValueError) as exc:
-                    raise ValueError(
-                        f"O nó de horário {slot['id']} não tem hor_id inteiro."
-                    ) from exc
-            pairs.append(
-                SlotPair(
-                    day,
-                    str(first_props["hora_inicio"]),
-                    str(second_props["hora_fim"]),
-                    tuple(ids),
-                )
-            )
-    return pairs
+def _day(slot: Dict) -> str:
+    properties = slot["properties"]
+    return str(properties.get("dia_semana", properties.get("dia", "")))
 
 
-def _max_disjoint_pair_count(graph: GraphDatabase) -> int:
-    """Count non-overlapping two-block meetings available over all weekdays."""
-    pairs_by_day: Dict[str, List[SlotPair]] = defaultdict(list)
-    for pair in _slot_pairs(graph):
-        pairs_by_day[pair.day].append(pair)
-    total = 0
-    for day_pairs in pairs_by_day.values():
-        selected = 0
-        last_end = -1
-        for pair in sorted(day_pairs, key=lambda item: (_minute(item.end), item.start)):
-            start = _minute(pair.start)
-            if start >= last_end:
-                selected += 1
-                last_end = _minute(pair.end)
-        total += selected
-    return total
+def _slot_id(slot: Dict) -> int:
+    raw_id = slot["properties"].get(
+        "hor_id", slot["id"].removeprefix("hor:")
+    )
+    try:
+        return int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"O nó de horário {slot['id']} não tem hor_id inteiro."
+        ) from exc
 
 
-def _same_day_adjacent(first: SlotPair, second: SlotPair) -> bool:
-    return first.day == second.day and (
-        _minute(first.end) == _minute(second.start)
-        or _minute(second.end) == _minute(first.start)
+def _adjacent(first: Dict, second: Dict) -> bool:
+    return _day(first) == _day(second) and (
+        _minute(first["properties"].get("hora_fim", ""))
+        == _minute(second["properties"].get("hora_inicio", ""))
+        or _minute(second["properties"].get("hora_fim", ""))
+        == _minute(first["properties"].get("hora_inicio", ""))
     )
 
 
-def _required_pair_groups(graph: GraphDatabase) -> List[Tuple[str, str]]:
-    """Return color pairs belonging to the two 30h chunks of each 60h class."""
+def _consecutive(slots: List[Dict]) -> bool:
+    if not slots or len({_day(slot) for slot in slots}) != 1:
+        return False
+    ordered = sorted(
+        slots, key=lambda slot: _minute(slot["properties"].get("hora_inicio", ""))
+    )
+    return all(_adjacent(left, right) for left, right in zip(ordered, ordered[1:]))
+
+
+def _allocation_groups(
+    graph: GraphDatabase,
+) -> List[Tuple[List[str], int]]:
+    vertices_by_allocation = _vertices_by_allocation(graph)
     groups = []
     for allocation in graph.get_nodes_by_type(VERTEX_TYPE):
         discipline = _discipline_for_allocation(graph, allocation)
-        if _discipline_workload(discipline) == 60:
-            chunks = _vertices_by_allocation(graph)[allocation["id"]]
-            if len(chunks) != 2:
-                raise ValueError(
-                    f"A disciplina de 60h da alocação {allocation['id']} "
-                    "não foi dividida em dois blocos de 30h."
-                )
-            groups.append((chunks[0], chunks[1]))
-        elif _discipline_workload(discipline) != 30:
-            raise ValueError(
-                f"A carga horária da alocação {allocation['id']} é "
-                f"{_discipline_workload(discipline)}h; os padrões definidos "
-                "só cobrem disciplinas de 30h e 60h."
+        groups.append(
+            (
+                vertices_by_allocation[allocation["id"]],
+                _discipline_workload(discipline),
             )
+        )
     return groups
+
+
+def _valid_allocation_slots(slots: List[Dict], workload: int) -> bool:
+    if workload == 30:
+        return len(slots) == 2 and _consecutive(slots)
+    if workload == 45:
+        return len(slots) == 3 and _consecutive(slots)
+    if workload == 60:
+        if len(slots) != 4:
+            return False
+        if _consecutive(slots):
+            return True
+        first_pair = slots[:2]
+        second_pair = slots[2:]
+        return (
+            _consecutive(first_pair)
+            and _consecutive(second_pair)
+            and _day(first_pair[0]) != _day(second_pair[0])
+        )
+    return True
+
+
+def _has_consecutive_completion(
+    group_colors: List[int], mapped: Dict[int, Dict], all_slots: List[Dict]
+) -> bool:
+    group_color_set = set(group_colors)
+    assigned = {
+        color: mapped[color]
+        for color in group_colors
+        if color in mapped
+    }
+    if not assigned:
+        return True
+
+    day_slots: Dict[str, List[Dict]] = defaultdict(list)
+    for slot in all_slots:
+        day_slots[_day(slot)].append(slot)
+
+    for slots_for_day in day_slots.values():
+        slots_for_day.sort(
+            key=lambda slot: _minute(slot["properties"].get("hora_inicio", ""))
+        )
+        for start in range(len(slots_for_day) - len(group_colors) + 1):
+            run = slots_for_day[start : start + len(group_colors)]
+            if not _consecutive(run):
+                continue
+            run_ids = {_slot_id(slot) for slot in run}
+            if not all(_slot_id(slot) in run_ids for slot in assigned.values()):
+                continue
+            occupied_by_other_color = any(
+                _slot_id(slot) in {
+                    _slot_id(mapped_slot)
+                    for color, mapped_slot in mapped.items()
+                    if color not in group_color_set
+                }
+                for slot in run
+            )
+            if not occupied_by_other_color:
+                return True
+    return False
+
+
+def _partial_allocation_slots_valid(
+    group_colors: List[int],
+    workload: int,
+    mapped: Dict[int, Dict],
+    all_slots: List[Dict],
+) -> bool:
+    if workload in (30, 45):
+        consecutive_groups = [group_colors]
+    elif workload == 60:
+        consecutive_groups = [group_colors[:2], group_colors[2:]]
+    else:
+        consecutive_groups = []
+
+    for consecutive_group in consecutive_groups:
+        if not _has_consecutive_completion(consecutive_group, mapped, all_slots):
+            return False
+
+    if workload == 60 and all(color in mapped for color in group_colors):
+        assigned = [mapped[color] for color in group_colors]
+        first_day = _day(assigned[0])
+        second_day = _day(assigned[2])
+        if first_day == second_day and not _consecutive(assigned):
+            return False
+    return True
 
 
 def map_colors_to_slots(
     graph: GraphDatabase, colors: Mapping[str, int]
-) -> Dict[int, Tuple[int, int]]:
-    """Map colors to consecutive slot pairs, keeping 60h classes contiguous."""
-    pairs = _slot_pairs(graph)
-    if not pairs and colors:
-        raise ValueError("O grafo não contém pares de horários consecutivos.")
-
+) -> Dict[int, int]:
+    """Assign each color a real 50-minute slot ID from the loaded SQLite graph."""
+    slots = sorted(graph.get_nodes_by_type(SLOT_NODE_TYPE), key=_slot_sort_key)
     color_ids = sorted(set(colors.values()))
+    if len(color_ids) > len(slots):
+        raise ValueError(
+            f"O grafo usa {len(color_ids)} cores, mas o banco só tem "
+            f"{len(slots)} horários."
+        )
     if any(color < 1 for color in color_ids):
         raise ValueError("As cores precisam ser índices inteiros a partir de 1.")
-    if color_ids and color_ids[-1] > len(pairs):
-        raise ValueError(
-            f"O grafo usa {color_ids[-1]} cores, mas só há {len(pairs)} pares."
-        )
 
-    # Colors are assigned a pair with backtracking: pairs cannot overlap, and
-    # chunks of each 60h class must use two days or four consecutive blocks.
-    color_of_vertex = dict(colors)
-    constraints: Set[frozenset[int]] = set()
-    for left, right in _required_pair_groups(graph):
-        if left not in color_of_vertex or right not in color_of_vertex:
-            raise ValueError("Uma disciplina de 60h está sem cor atribuída.")
-        constraints.add(frozenset((color_of_vertex[left], color_of_vertex[right])))
+    groups = []
+    for vertices, workload in _allocation_groups(graph):
+        if any(vertex not in colors for vertex in vertices):
+            raise ValueError("Uma aula está sem cor atribuída.")
+        group_colors = [colors[vertex] for vertex in vertices]
+        if len(set(group_colors)) != len(group_colors):
+            raise ValueError("Aulas da mesma alocação receberam a mesma cor.")
+        groups.append((group_colors, workload))
 
-    domains = {color: list(pairs) for color in color_ids}
-    mapped: Dict[int, SlotPair] = {}
-    used_ids: Set[int] = set()
+    mapped: Dict[int, Dict] = {}
+    used_slot_ids: Set[int] = set()
+    groups_by_color: Dict[int, int] = defaultdict(int)
+    for group_colors, workload in groups:
+        if workload in (30, 60):
+            for color in group_colors:
+                groups_by_color[color] += 1
 
     def search() -> bool:
         if len(mapped) == len(color_ids):
-            return True
+            return all(
+                _valid_allocation_slots(
+                    [mapped[color] for color in group_colors], workload
+                )
+                for group_colors, workload in groups
+            )
+
         remaining = [color for color in color_ids if color not in mapped]
-        color = min(
-            remaining,
-            key=lambda candidate: (
-                sum(
-                    1
-                    for pair in domains[candidate]
-                    if not (set(pair.horario_ids) & used_ids)
-                    and all(
-                        other not in mapped
-                        or frozenset((candidate, other)) not in constraints
-                        or _same_day_adjacent(pair, mapped[other])
-                        or pair.day != mapped[other].day
-                        for other in remaining
-                        if other != candidate
-                    )
-                ),
-                candidate,
-            ),
-        )
-        for pair in domains[color]:
-            pair_ids = set(pair.horario_ids)
-            if pair_ids & used_ids:
+        color = max(remaining, key=lambda item: (groups_by_color[item], -item))
+        for slot in slots:
+            slot_id = _slot_id(slot)
+            if slot_id in used_slot_ids:
                 continue
-            valid = True
-            for other, other_pair in mapped.items():
-                if frozenset((color, other)) in constraints:
-                    same_day = pair.day == other_pair.day
-                    if same_day and not _same_day_adjacent(pair, other_pair):
-                        valid = False
-                        break
-            if not valid:
-                continue
-            mapped[color] = pair
-            used_ids.update(pair_ids)
-            if search():
+            mapped[color] = slot
+            used_slot_ids.add(slot_id)
+            if all(
+                _partial_allocation_slots_valid(
+                    group_colors, workload, mapped, slots
+                )
+                for group_colors, workload in groups
+                if workload in (30, 45, 60)
+            ) and search():
                 return True
-            used_ids.difference_update(pair_ids)
+            used_slot_ids.remove(slot_id)
             del mapped[color]
         return False
 
     if not search():
         raise ValueError(
-            "Não há combinação de pares de horários que respeite a sequência "
-            "das disciplinas de 60h."
+            "Não há combinação de horários reais que respeite os padrões "
+            "de 30h e 60h."
         )
-    return {color: mapped[color].horario_ids for color in color_ids}
+    return {color: _slot_id(mapped[color]) for color in color_ids}
 
 
 def color_and_assign_slots(
     graph: GraphDatabase,
     max_colors: Optional[int] = None,
-) -> Dict[str, Dict[str, object]]:
-    """Color the graph and attach two consecutive real slot IDs per chunk."""
+) -> Dict[str, Dict[str, int]]:
+    """Color DB-backed class meetings and attach their real ``hor_id`` values."""
     colors = color_allocations(graph, max_colors=max_colors)
     slot_ids = map_colors_to_slots(graph, colors)
-    results: Dict[str, Dict[str, object]] = {}
+    results: Dict[str, Dict[str, int]] = {}
     for vertex, color in colors.items():
-        assignment = {"color": color, "horario_ids": slot_ids[color]}
+        assignment = {"color": color, "horario_id": slot_ids[color]}
         results[vertex] = assignment
-        allocation_id = vertex.split("#30h:", maxsplit=1)[0]
+        allocation_id = vertex.split("#50min:", maxsplit=1)[0]
         stored = graph.nodes[allocation_id]["properties"]["assignments"]
         next(item for item in stored if item["vertex"] == vertex).update(assignment)
-
     return results

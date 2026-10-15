@@ -5,6 +5,7 @@
 .env.*.local
 
 *.db
+!src/database/grade_horaria.db
 *.sqlite
 *.sqlite3
 

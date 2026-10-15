@@ -5,6 +5,7 @@ import sqlite3
 from src.database import GradeAlreadyExistsError
 from src.graph.graph_db import GraphDatabase
 from src.graph.sqlite_loader import load_from_sqlite
+from src.graph.coloring import color_and_assign_slots
 
 graph_bp = Blueprint("graph", __name__, url_prefix="/graph")
 
@@ -141,6 +142,40 @@ def reload():
     if ok:
         current_app.extensions["graph_db"] = g
     return jsonify({"ok": ok}), (200 if ok else 500)
+
+
+@graph_bp.post("/grade/colorir")
+def color_grade():
+    """Generate a timetable proposal from the application's SQLite database."""
+    database_path = current_app.extensions["grade_repository"].database_path
+    graph = GraphDatabase()
+    if not load_from_sqlite(graph, database_path):
+        return jsonify({"erro": "Não foi possível carregar o grafo do SQLite."}), 500
+
+    try:
+        assignments = color_and_assign_slots(graph)
+    except ValueError as exc:
+        return jsonify({"erro": str(exc)}), 422
+
+    by_allocation = defaultdict(list)
+    for vertex, assignment in assignments.items():
+        allocation_id = vertex.split("#50min:", maxsplit=1)[0]
+        by_allocation[allocation_id].append({
+            "aula": int(vertex.rsplit(":", maxsplit=1)[1]),
+            **assignment,
+        })
+
+    current_app.extensions["graph_db"] = graph
+    return jsonify({
+        "ok": True,
+        "alocacoes": [
+            {
+                "alo_id": graph.nodes[allocation_id]["properties"].get("alo_id"),
+                "aulas": sorted(meetings, key=lambda item: item["aula"]),
+            }
+            for allocation_id, meetings in sorted(by_allocation.items())
+        ],
+    }), 200
 
 
 @graph_bp.post("/grade/instanciar")
