@@ -13,7 +13,7 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 database_path = os.getenv(
     "GRADE_DATABASE_PATH",
-    str(BASE_DIR / "src" / "database" / "grade_horaria.db"),
+    str(BASE_DIR.parent / "grade_horaria.db"),
 )
 course_repository = CourseRepository(database_path)
 course_repository.initialize()
