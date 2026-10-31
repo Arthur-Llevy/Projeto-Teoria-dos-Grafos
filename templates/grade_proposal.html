@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Revisar proposta | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=5) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Prévia da proposta de grade</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="/">Voltar à grade salva</a>
+    </header>
+
+    <main class="registration-main proposal-main">
+      <a class="registration-back" href="/">← Voltar para a grade salva</a>
+      <div class="registration-heading">
+        <h1>Proposta para {{ semester or 'semestre não informado' }}</h1>
+        <p>
+          Revise os horários abaixo. A grade atual só será substituída depois da
+          confirmação.
+        </p>
+      </div>
+
+      {% if errors %}
+      <ul class="registration-errors" role="alert">
+        {% for error in errors %}
+        <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if rows %}
+      <section class="proposal-notice">
+        <strong>{{ rows|length }} aulas semanais propostas</strong>
+        <span>
+          O algoritmo ainda não atribui salas; elas aparecerão como não
+          informadas até essa etapa ser implementada.
+        </span>
+      </section>
+
+      <div class="proposal-table-wrap">
+        <table class="proposal-table">
+          <thead>
+            <tr>
+              <th>Dia</th>
+              <th>Horário</th>
+              <th>Disciplina</th>
+              <th>Professor</th>
+              <th>Aula</th>
+              <th>Período</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td>{{ row.dia }}</td>
+              <td>{{ row.hora_inicio }}–{{ row.hora_fim }}</td>
+              <td>
+                <strong>{{ row.disciplina }}</strong>
+                {% if row.codigo %}<small>{{ row.codigo }}</small>{% endif %}
+              </td>
+              <td>{{ row.professor }}</td>
+              <td>{{ row.aula }}</td>
+              <td>{{ row.periodo }}º</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="proposal-actions">
+        <form
+          action="{{ url_for('graph.accept_grade_proposal') }}"
+          method="post"
+          class="proposal-accept-form"
+        >
+          <input type="hidden" name="semestre" value="{{ semester }}" />
+          <input type="hidden" name="fingerprint" value="{{ fingerprint }}" />
+          {% if existing_count %}
+          <label class="registration-check proposal-replace-check">
+            <input type="checkbox" name="substituir" value="1" required />
+            <span>
+              Substituir a grade existente deste semestre
+              ({{ existing_count }} registros)
+            </span>
+          </label>
+          {% endif %}
+          <button class="registration-submit" type="submit">
+            Aceitar e salvar grade
+          </button>
+        </form>
+        <form
+          action="{{ url_for('graph.discard_grade_proposal') }}"
+          method="post"
+        >
+          <input type="hidden" name="semestre" value="{{ semester }}" />
+          <button class="registration-cancel" type="submit">
+            Recusar proposta
+          </button>
+        </form>
+      </div>
+      {% elif not errors %}
+      <p class="proposal-empty">Nenhuma aula foi incluída na proposta.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

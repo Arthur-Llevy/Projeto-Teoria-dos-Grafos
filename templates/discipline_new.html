@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nova disciplina | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=4) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <rect
+              x="2.5"
+              y="3.5"
+              width="15"
+              height="14"
+              rx="2"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M6 2.5v3M14 2.5v3M3 7.5h14M6 10.5h2M11 10.5h2M6 14h2M11 14h2"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro de disciplina</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="/">Voltar à grade</a>
+    </header>
+
+    <main class="registration-main">
+      <a class="registration-back" href="/">← Voltar para a grade</a>
+      <div class="registration-heading">
+        <h1>Nova disciplina</h1>
+        <p>Preencha os dados para adicionar uma disciplina ao curso.</p>
+      </div>
+
+      <form class="registration-form" method="post">
+        {% if errors %}
+        <ul class="registration-errors" role="alert">
+          {% for error in errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="registration-fields">
+          <label class="registration-field">
+            Código
+            <input
+              name="codigo"
+              type="text"
+              maxlength="20"
+              value="{{ values.get('codigo', '') }}"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Nome da disciplina
+            <input
+              name="descricao"
+              type="text"
+              maxlength="100"
+              value="{{ values.get('descricao', '') }}"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Curso
+            <select name="curso_id" required {% if not courses %}disabled{% endif %}>
+              <option value="">Selecione um curso</option>
+              {% for course in courses %}
+              <option
+                value="{{ course.cur_id }}"
+                {% if values.get('curso_id')|int == course.cur_id or (not values.get('curso_id') and loop.first) %}selected{% endif %}
+              >
+                {{ course.cur_descricao }}
+              </option>
+              {% endfor %}
+            </select>
+            {% if not courses %}
+            <small>Nenhum curso está cadastrado.</small>
+            {% endif %}
+          </label>
+          <label class="registration-field">
+            Período
+            <input
+              name="periodo"
+              type="number"
+              min="1"
+              step="1"
+              value="{{ values.get('periodo', '') }}"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Carga horária (horas)
+            <input
+              name="carga_horaria"
+              type="number"
+              min="1"
+              step="1"
+              value="{{ values.get('carga_horaria', '') }}"
+              required
+            />
+          </label>
+          <label class="registration-check">
+            <input
+              name="eh_eletiva"
+              type="checkbox"
+              value="1"
+              {% if values.get('eh_eletiva') == '1' %}checked{% endif %}
+            />
+            Disciplina eletiva
+          </label>
+        </div>
+
+        <div class="registration-actions">
+          <a class="registration-cancel" href="/">Cancelar</a>
+          <button class="registration-submit" type="submit">
+            Cadastrar disciplina
+          </button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
