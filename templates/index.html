@@ -172,8 +172,61 @@
           Disciplina cadastrada com sucesso.
         </p>
         {% endif %}
+        {% if request.args.get('grade_salva') == '1' %}
+        <p class="registration-success" role="status">
+          Proposta aceita e grade salva no banco de dados.
+        </p>
+        {% endif %}
+        {% if request.args.get('proposta_descartada') == '1' %}
+        <p class="registration-success proposal-dismissed" role="status">
+          Proposta descartada. A grade salva não foi alterada.
+        </p>
+        {% endif %}
+        <section class="proposal-launch" aria-labelledby="proposal-heading">
+          <div>
+            <h2 id="proposal-heading">Gerar uma nova proposta</h2>
+            <p>A proposta será exibida para revisão antes de ser salva.</p>
+          </div>
+          <form
+            class="proposal-launch-form"
+            action="{{ url_for('graph.review_grade_proposal') }}"
+            method="post"
+          >
+            <label class="field-label" for="proposal-semester">Semestre</label>
+            <input
+              id="proposal-semester"
+              name="semestre"
+              type="text"
+              maxlength="10"
+              placeholder="Ex.: 2026.2"
+              required
+            />
+            <button class="registration-submit" type="submit">
+              Gerar proposta
+            </button>
+          </form>
+        </section>
+        {% if semesters %}
+        <form class="semester-filter" action="/" method="get">
+          <label class="field-label" for="saved-semester">Grade salva</label>
+          <select id="saved-semester" name="semestre">
+            {% for semester in semesters %}
+            <option value="{{ semester }}" {% if semester == selected_semester %}selected{% endif %}>
+              {{ semester }}
+            </option>
+            {% endfor %}
+          </select>
+          <button class="registration-cancel" type="submit">Visualizar</button>
+        </form>
+        {% else %}
+        <p class="proposal-empty" role="status">
+          Ainda não há grade salva. Gere e aceite uma proposta para preencher a
+          tabela.
+        </p>
+        {% endif %}
         <div class="workspace-summary" id="workspace-summary">
-          Grade completa · {{ disciplines|length }} disciplinas · {{
+          {% if selected_semester %}Grade do semestre {{ selected_semester }} · {% endif %}
+          {{ disciplines|length }} disciplinas · {{
           entries|length }} encontros semanais
         </div>
         <div class="table-wrap">

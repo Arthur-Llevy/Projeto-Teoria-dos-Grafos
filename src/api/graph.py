@@ -1,6 +1,17 @@
-from collections import defaultdict
-from flask import Blueprint, jsonify, current_app, abort, request
+import hashlib
+import json
 import sqlite3
+from collections import defaultdict
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from src.database import GradeAlreadyExistsError
 from src.graph.graph_db import GraphDatabase
@@ -11,6 +22,87 @@ graph_bp = Blueprint("graph", __name__, url_prefix="/graph")
 
 def _g():
     return current_app.extensions["graph_db"]
+
+
+def _generate_proposal():
+    """Calculate assignments and enrich them with display data from SQLite."""
+    database_path = current_app.extensions["grade_repository"].database_path
+    graph = GraphDatabase()
+    if not load_from_sqlite(graph, database_path):
+        raise RuntimeError("Não foi possível carregar o grafo do SQLite.")
+
+    assignments = color_and_assign_slots(graph)
+    rows = []
+    day_order = {
+        "Segunda": 1,
+        "Terça": 2,
+        "Quarta": 3,
+        "Quinta": 4,
+        "Sexta": 5,
+        "Sábado": 6,
+        "Domingo": 7,
+    }
+    for vertex, result in assignments.items():
+        allocation_node_id = vertex.split("#50min:", maxsplit=1)[0]
+        allocation = graph.nodes[allocation_node_id]["properties"]
+        discipline = graph.nodes.get(f"disc:{allocation.get('dis_id')}", {})
+        professor = graph.nodes.get(f"prof:{allocation.get('pro_id')}", {})
+        horario = graph.nodes.get(f"hor:{result['horario_id']}", {})
+        discipline_properties = discipline.get("properties", {})
+        professor_properties = professor.get("properties", {})
+        horario_properties = horario.get("properties", {})
+        day = horario_properties.get("dia_semana", "")
+        start = horario_properties.get("hora_inicio", "")
+        rows.append({
+            "alo_id": int(allocation["alo_id"]),
+            "aula": int(vertex.rsplit(":", maxsplit=1)[1]),
+            "color": result["color"],
+            "horario_id": int(result["horario_id"]),
+            "dia": day,
+            "hora_inicio": start,
+            "hora_fim": horario_properties.get("hora_fim", ""),
+            "disciplina": discipline_properties.get("descricao", "Disciplina"),
+            "codigo": discipline_properties.get("codigo", ""),
+            "periodo": discipline_properties.get("periodo", ""),
+            "carga_horaria": discipline_properties.get("carga_horaria", ""),
+            "professor": professor_properties.get("nome", "Professor não informado"),
+        })
+    rows.sort(
+        key=lambda row: (
+            day_order.get(row["dia"], 99),
+            row["hora_inicio"],
+            row["disciplina"],
+            row["alo_id"],
+            row["aula"],
+        )
+    )
+    return rows
+
+
+def _proposal_fingerprint(semester, rows):
+    assignments = sorted(
+        ({"alo_id": row["alo_id"], "horario_id": row["horario_id"]}
+         for row in rows),
+        key=lambda item: (item["alo_id"], item["horario_id"]),
+    )
+    payload = json.dumps(
+        {"semestre": semester, "alocacoes": assignments},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _render_proposal(semester, rows, error=None, status=200):
+    repository = current_app.extensions["grade_repository"]
+    return render_template(
+        "grade_proposal.html",
+        semester=semester,
+        rows=rows,
+        errors=[error] if error else [],
+        existing_count=repository.count_for_semester(semester),
+        fingerprint=_proposal_fingerprint(semester, rows),
+    ), status
 
 
 @graph_bp.get("/resumo")
@@ -176,6 +268,133 @@ def color_grade():
             for allocation_id, meetings in sorted(by_allocation.items())
         ],
     }), 200
+
+
+@graph_bp.post("/grade/proposta")
+def review_grade_proposal():
+    """Generate an HTML preview without persisting its timetable rows."""
+    semester = request.form.get("semestre", "").strip()
+    if not semester or len(semester) > 10:
+        return render_template(
+            "grade_proposal.html",
+            semester=semester,
+            rows=[],
+            errors=["Informe um semestre com até 10 caracteres."],
+            existing_count=0,
+            fingerprint="",
+        ), 400
+
+    try:
+        rows = _generate_proposal()
+    except ValueError as exc:
+        return render_template(
+            "grade_proposal.html",
+            semester=semester,
+            rows=[],
+            errors=[str(exc)],
+            existing_count=0,
+            fingerprint="",
+        ), 422
+    except RuntimeError as exc:
+        return render_template(
+            "grade_proposal.html",
+            semester=semester,
+            rows=[],
+            errors=[str(exc)],
+            existing_count=0,
+            fingerprint="",
+        ), 500
+
+    return _render_proposal(semester, rows)
+
+
+@graph_bp.post("/grade/proposta/aceitar")
+def accept_grade_proposal():
+    """Recalculate the displayed proposal and persist it only after acceptance."""
+    semester = request.form.get("semestre", "").strip()
+    submitted_fingerprint = request.form.get("fingerprint", "")
+    if not semester or len(semester) > 10:
+        return redirect(url_for("index"))
+
+    try:
+        rows = _generate_proposal()
+    except ValueError as exc:
+        return render_template(
+            "grade_proposal.html",
+            semester=semester,
+            rows=[],
+            errors=[str(exc)],
+            existing_count=0,
+            fingerprint="",
+        ), 422
+    except RuntimeError as exc:
+        return render_template(
+            "grade_proposal.html",
+            semester=semester,
+            rows=[],
+            errors=[str(exc)],
+            existing_count=0,
+            fingerprint="",
+        ), 500
+
+    current_fingerprint = _proposal_fingerprint(semester, rows)
+    if submitted_fingerprint != current_fingerprint:
+        return _render_proposal(
+            semester,
+            rows,
+            error=(
+                "Os dados mudaram desde a prévia. Confira a proposta atualizada "
+                "antes de aceitá-la."
+            ),
+            status=409,
+        )
+
+    assignments = [
+        {"alo_id": row["alo_id"], "horario_id": row["horario_id"]}
+        for row in rows
+    ]
+    replace_existing = request.form.get("substituir") == "1"
+    repository = current_app.extensions["grade_repository"]
+    try:
+        repository.replace_semester(
+            semester,
+            assignments,
+            replace_existing=replace_existing,
+        )
+    except GradeAlreadyExistsError:
+        return _render_proposal(
+            semester,
+            rows,
+            error=(
+                "Esse semestre já possui uma grade salva. Marque a opção para "
+                "substituí-la e confirme novamente, ou descarte a proposta."
+            ),
+            status=409,
+        )
+    except (ValueError, sqlite3.Error):
+        current_app.logger.exception("Falha ao aceitar a proposta da grade")
+        return _render_proposal(
+            semester,
+            rows,
+            error="Não foi possível salvar a proposta. Consulte o log da aplicação.",
+            status=422,
+        )
+
+    updated_graph = GraphDatabase()
+    if load_from_sqlite(updated_graph, repository.database_path):
+        current_app.extensions["graph_db"] = updated_graph
+    return redirect(
+        url_for("index", grade_salva="1", semestre=semester), code=303
+    )
+
+
+@graph_bp.post("/grade/proposta/descartar")
+def discard_grade_proposal():
+    """Discard the browser preview; no proposal rows were persisted yet."""
+    semester = request.form.get("semestre", "").strip()
+    return redirect(
+        url_for("index", proposta_descartada="1", semestre=semester), code=303
+    )
 
 
 @graph_bp.post("/grade/instanciar")

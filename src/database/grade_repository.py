@@ -32,6 +32,14 @@ class GradeRepository:
                 """
             )
 
+    def count_for_semester(self, semester: str) -> int:
+        """Return how many saved meeting rows belong to a semester."""
+        with sqlite3.connect(str(self.database_path), timeout=10) as connection:
+            return connection.execute(
+                "SELECT COUNT(*) FROM gra_grade_horaria WHERE gra_semestre = ?",
+                (semester.strip(),),
+            ).fetchone()[0]
+
     def replace_semester(
         self,
         semester: str,

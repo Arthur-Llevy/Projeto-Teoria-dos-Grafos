@@ -43,6 +43,15 @@ app.register_blueprint(courses_bp)
 def index():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
+    semester_rows = connection.execute(
+        "SELECT DISTINCT gra_semestre FROM gra_grade_horaria "
+        "WHERE gra_semestre IS NOT NULL ORDER BY gra_semestre"
+    ).fetchall()
+    semesters = [row["gra_semestre"] for row in semester_rows]
+    selected_semester = request.args.get("semestre")
+    if selected_semester not in semesters:
+        selected_semester = semesters[-1] if semesters else ""
+
     rows = connection.execute("""
         SELECT g.gra_semestre, h.hor_dia_semana, h.hor_hora_inicio,
                h.hor_hora_fim, a.alo_id, d.dis_id, d.dis_codigo,
@@ -54,11 +63,12 @@ def index():
         JOIN hor_horario AS h ON h.hor_id = g.hor_id
         LEFT JOIN pro_professor AS p ON p.pro_id = a.pro_id
         LEFT JOIN sal_sala AS s ON s.sal_id = g.sal_id
+        WHERE g.gra_semestre = ?
         ORDER BY CASE h.hor_dia_semana
             WHEN 'Segunda' THEN 1 WHEN 'Terça' THEN 2 WHEN 'Quarta' THEN 3
             WHEN 'Quinta' THEN 4 WHEN 'Sexta' THEN 5 END,
             h.hor_hora_inicio, d.dis_descricao
-    """).fetchall()
+    """, (selected_semester,)).fetchall()
     disciplines = connection.execute("""
          SELECT d.dis_id, d.dis_codigo, d.dis_descricao, d.dis_periodo,
              d.dis_carga_horaria, d.dis_eh_eletiva, p.pro_id AS professor_id,
@@ -156,6 +166,7 @@ def index():
         days=days, time_slots=time_slots, day_counts=day_counts,
         discipline_count=len(disciplines), professor_count=len(professors),
         room_count=room_count,
+        semesters=semesters, selected_semester=selected_semester,
         discipline_created=request.args.get("cadastro") == "sucesso",
     )
 
