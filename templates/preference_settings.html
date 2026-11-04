@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parâmetro de preferências | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=7) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Configuração de preferências</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('professors.professors') }}">
+        Ver professores
+      </a>
+    </header>
+
+    <main class="registration-main">
+      <a class="registration-back" href="{{ url_for('professors.professors') }}">
+        ← Voltar para professores
+      </a>
+      <div class="registration-heading">
+        <h1>Parâmetro N</h1>
+        <p>Defina quantos horários excedentes cada professor deve indicar além dos necessários à sua carga alocada.</p>
+        <p>O projeto ainda não tem autenticação por perfil; nesta versão a tela de configuração fica disponível aos usuários da aplicação.</p>
+      </div>
+
+      {% if errors %}
+      <ul class="registration-errors" role="alert">
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if saved %}
+      <p class="registration-success" role="status">Parâmetro N salvo.</p>
+      {% endif %}
+
+      <form class="registration-form" method="post" action="{{ url_for('professors.configure_min_extra_slots') }}">
+        <div class="registration-fields">
+          <label class="registration-field">
+            Horários excedentes mínimos (N)
+            <input name="min_horarios_excedentes" type="number" min="0" max="{{ slot_count }}" value="{{ value if value is not none else '' }}" required />
+            <small>Há {{ slot_count }} horários cadastrados. Sem N configurado, as preferências dos professores ficam desativadas.</small>
+          </label>
+        </div>
+        <div class="registration-actions">
+          <a class="registration-cancel" href="{{ url_for('professors.professors') }}">Cancelar</a>
+          <button class="registration-submit" type="submit">Salvar N</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

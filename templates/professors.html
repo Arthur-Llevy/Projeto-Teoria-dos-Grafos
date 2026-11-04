@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Professores | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=7) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro e consulta de docentes</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('professors.new_professor') }}">
+        <span aria-hidden="true">+</span> Novo professor
+      </a>
+    </header>
+
+    <main class="registration-main course-list-main">
+      <a class="registration-back" href="/">← Voltar para a grade</a>
+      <div class="registration-heading">
+        <h1>Professores</h1>
+        <p>Consulte os docentes cadastrados ou adicione um novo.</p>
+      </div>
+
+      {% if created %}
+      <p class="registration-success" role="status">
+        Professor cadastrado com sucesso.
+      </p>
+      {% endif %}
+
+      <section class="proposal-launch" aria-labelledby="preference-setting-heading">
+        <div>
+          <h2 id="preference-setting-heading">Preferências de horário</h2>
+          <p>
+            {% if min_extra_slots is not none %}
+            O parâmetro do coordenador está definido: {{ min_extra_slots }} horário(s) excedente(s).
+            {% else %}
+            Configure N antes de registrar preferências de horário.
+            {% endif %}
+          </p>
+        </div>
+        <a class="registration-cancel" href="{{ url_for('professors.configure_min_extra_slots') }}">
+          Configurar N
+        </a>
+      </section>
+
+      <section class="course-table-panel" aria-label="Professores cadastrados">
+        {% if professors %}
+        <div class="course-table-wrap">
+          <table class="course-table">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Nome</th>
+                <th scope="col">Matrícula</th>
+                <th scope="col">Curso</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for professor in professors %}
+              <tr>
+                <td>{{ professor.id }}</td>
+                <td>{{ professor.nome }}</td>
+                <td>{{ professor.matricula or "—" }}</td>
+                <td>{{ professor.curso or "Curso não informado" }}</td>
+                <td>
+                  <a class="registration-cancel" href="{{ url_for('professors.professor_allocations', professor_id=professor.id) }}">
+                    Alocações e preferências
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="course-empty-state">Ainda não há professores cadastrados.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
