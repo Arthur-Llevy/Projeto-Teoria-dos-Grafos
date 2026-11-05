@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Novo professor | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=7) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro de professores</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('professors.professors') }}">
+        Ver professores
+      </a>
+    </header>
+
+    <main class="registration-main">
+      <a class="registration-back" href="{{ url_for('professors.professors') }}">
+        ← Voltar para professores
+      </a>
+      <div class="registration-heading">
+        <h1>Novo professor</h1>
+        <p>Informe os dados do docente e o curso ao qual está vinculado.</p>
+      </div>
+
+      <form class="registration-form" method="post" action="{{ url_for('professors.professors') }}">
+        {% if errors %}
+        <ul class="registration-errors" role="alert">
+          {% for error in errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if not courses %}
+        <p class="course-empty-state">
+          Cadastre um curso antes de incluir professores.
+          <a href="{{ url_for('courses.new_course') }}">Cadastrar curso</a>
+        </p>
+        {% endif %}
+
+        <div class="registration-fields">
+          <label class="registration-field">
+            Nome completo
+            <input
+              name="nome"
+              type="text"
+              maxlength="100"
+              value="{{ values.get('nome', '') }}"
+              autocomplete="name"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Matrícula
+            <input
+              name="matricula"
+              type="text"
+              maxlength="20"
+              value="{{ values.get('matricula', '') }}"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Curso
+            <select name="curso_id" required {% if not courses %}disabled{% endif %}>
+              <option value="">Selecione um curso</option>
+              {% for course in courses %}
+              <option value="{{ course.id }}" {% if values.get('curso_id')|string == course.id|string %}selected{% endif %}>
+                {{ course.nome }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div class="registration-actions">
+          <a class="registration-cancel" href="{{ url_for('professors.professors') }}">
+            Cancelar
+          </a>
+          <button class="registration-submit" type="submit" {% if not courses %}disabled{% endif %}>
+            Cadastrar professor
+          </button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

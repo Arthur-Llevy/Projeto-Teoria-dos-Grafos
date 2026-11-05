@@ -2,7 +2,8 @@ from flask import Flask, redirect, render_template, request, url_for
 from src.api.health import health_bp
 from src.api.graph import graph_bp
 from src.api.courses import courses_bp
-from src.database import CourseRepository, GradeRepository
+from src.api.professors import professors_bp
+from src.database import CourseRepository, GradeRepository, ProfessorRepository
 from src.graph.graph_db import GraphDatabase
 from src.graph.sqlite_loader import load_from_sqlite
 from pathlib import Path
@@ -18,6 +19,9 @@ database_path = os.getenv(
 course_repository = CourseRepository(database_path)
 course_repository.initialize()
 app.extensions["course_repository"] = course_repository
+professor_repository = ProfessorRepository(database_path)
+professor_repository.initialize()
+app.extensions["professor_repository"] = professor_repository
 grade_repository = GradeRepository(database_path)
 grade_repository.initialize()
 app.extensions["grade_repository"] = grade_repository
@@ -38,6 +42,7 @@ app.extensions["graph_db"] = graph_db
 app.register_blueprint(health_bp)
 app.register_blueprint(graph_bp)
 app.register_blueprint(courses_bp)
+app.register_blueprint(professors_bp)
 
 @app.route("/")
 def index():

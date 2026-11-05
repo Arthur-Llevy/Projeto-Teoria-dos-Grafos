@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ professor.nome }} | Organizador de Horários</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=7) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Alocações e preferências</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('professors.professors') }}">
+        Ver professores
+      </a>
+    </header>
+
+    <main class="registration-main course-list-main">
+      <a class="registration-back" href="{{ url_for('professors.professors') }}">
+        ← Voltar para professores
+      </a>
+      <div class="registration-heading">
+        <h1>{{ professor.nome }}</h1>
+        <p>{{ professor.matricula }} · {{ professor.curso or "Curso não informado" }}</p>
+      </div>
+
+      {% if errors %}
+      <ul class="registration-errors" role="alert">
+        {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if allocation_created %}
+      <p class="registration-success" role="status">Disciplina alocada ao professor.</p>
+      {% endif %}
+      {% if preferences_saved %}
+      <p class="registration-success" role="status">Preferências de horário salvas.</p>
+      {% endif %}
+
+      <section class="course-table-panel" aria-label="Disciplinas alocadas">
+        <div class="detail-section-heading">
+          <div>
+            <h2>Disciplinas alocadas</h2>
+            <p>Uma alocação liga este professor à disciplina no banco de dados.</p>
+          </div>
+        </div>
+        {% if allocations %}
+        <div class="course-table-wrap">
+          <table class="course-table">
+            <thead>
+              <tr><th>Disciplina</th><th>Período</th><th>Carga horária</th></tr>
+            </thead>
+            <tbody>
+              {% for allocation in allocations %}
+              <tr>
+                <td>{{ allocation.dis_codigo }} · {{ allocation.dis_descricao }}</td>
+                <td>{{ allocation.dis_periodo }}º</td>
+                <td>{{ allocation.dis_carga_horaria }}h</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="course-empty-state">Ainda não há disciplinas alocadas a este professor.</p>
+        {% endif %}
+      </section>
+
+      <form class="registration-form detail-form" method="post" action="{{ url_for('professors.professor_allocations', professor_id=professor.id) }}">
+        <div class="registration-heading">
+          <h2>Alocar uma disciplina</h2>
+          <p>São exibidas disciplinas do curso {{ professor.curso }}.</p>
+        </div>
+        {% if available_disciplines %}
+        <label class="registration-field">
+          Disciplina
+          <select name="dis_id" required>
+            <option value="">Selecione uma disciplina</option>
+            {% for discipline in available_disciplines %}
+            <option value="{{ discipline.dis_id }}">
+              {{ discipline.dis_periodo }}º · {{ discipline.dis_codigo }} — {{ discipline.dis_descricao }}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="registration-actions">
+          <button class="registration-submit" type="submit">Salvar alocação</button>
+        </div>
+        {% else %}
+        <p class="course-empty-state">Não há outras disciplinas disponíveis do curso deste professor.</p>
+        {% endif %}
+      </form>
+
+      <form class="registration-form detail-form" method="post" action="{{ url_for('professors.save_professor_preferences', professor_id=professor.id) }}">
+        <div class="registration-heading">
+          <h2>Preferências de horário</h2>
+          <p>
+            {% if min_extra_slots is none %}
+            O coordenador precisa configurar N antes de ativar as preferências.
+            {% else %}
+            São necessários {{ required_slot_count }} horários para a carga alocada
+            mais {{ min_extra_slots }} excedente(s): mínimo de {{ minimum_preference_count }} horários preferidos.
+            {% endif %}
+          </p>
+        </div>
+        <p class="preference-setting-link">
+          <a href="{{ url_for('professors.configure_min_extra_slots') }}">Configurar o parâmetro N do coordenador</a>
+        </p>
+        <p class="preference-setting-link">
+          Selecione os horários preferidos. Deixe todos desmarcados e salve para remover as preferências.
+        </p>
+        {% if slots %}
+        <div class="preferred-slot-list">
+          {% for group in slot_groups %}
+          <fieldset class="preferred-slot-day">
+            <legend>{{ group.day }}</legend>
+            <div class="preferred-slot-options">
+              {% for slot in group.slots %}
+              <label>
+                <input type="checkbox" name="hor_ids" value="{{ slot.hor_id }}" {% if slot.hor_id in selected_slot_ids %}checked{% endif %} />
+                <span>{{ slot.hor_hora_inicio }}–{{ slot.hor_hora_fim }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </fieldset>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="course-empty-state">Cadastre horários antes de registrar preferências.</p>
+        {% endif %}
+        <div class="registration-actions">
+          <button class="registration-submit" type="submit">Salvar preferências</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>
