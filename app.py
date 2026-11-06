@@ -3,7 +3,13 @@ from src.api.health import health_bp
 from src.api.graph import graph_bp
 from src.api.courses import courses_bp
 from src.api.professors import professors_bp
-from src.database import CourseRepository, GradeRepository, ProfessorRepository
+from src.api.slots import slots_bp
+from src.database import (
+    CourseRepository,
+    GradeRepository,
+    ProfessorRepository,
+    SlotRepository,
+)
 from src.graph.graph_db import GraphDatabase
 from src.graph.sqlite_loader import load_from_sqlite
 from pathlib import Path
@@ -25,6 +31,9 @@ app.extensions["professor_repository"] = professor_repository
 grade_repository = GradeRepository(database_path)
 grade_repository.initialize()
 app.extensions["grade_repository"] = grade_repository
+slot_repository = SlotRepository(database_path)
+slot_repository.initialize()
+app.extensions["slot_repository"] = slot_repository
 
 DB_PATH = Path(database_path)
 SAMPLE_GRAPH = BASE_DIR / "src" / "graph" / "sample_graph_data.json"
@@ -43,6 +52,7 @@ app.register_blueprint(health_bp)
 app.register_blueprint(graph_bp)
 app.register_blueprint(courses_bp)
 app.register_blueprint(professors_bp)
+app.register_blueprint(slots_bp)
 
 @app.route("/")
 def index():

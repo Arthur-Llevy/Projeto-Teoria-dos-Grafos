@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Novo slot | Organizador de Horários</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=8) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-mark" aria-hidden="true">▦</span>
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro de slot de horário</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('slots.slots') }}">
+        Ver slots
+      </a>
+    </header>
+
+    <main class="registration-main">
+      <a class="registration-back" href="{{ url_for('slots.slots') }}">
+        ← Voltar para os slots
+      </a>
+      <div class="registration-heading">
+        <h1>Novo slot de horário</h1>
+        <p>
+          Cadastre um bloco da grade semanal. Os blocos padrão vão de A a L,
+          em períodos de 50 minutos entre 07:10 e 17:10.
+        </p>
+      </div>
+
+      <form
+        class="registration-form"
+        method="post"
+        action="{{ url_for('slots.slots') }}"
+      >
+        {% if errors %}
+        <ul class="registration-errors" role="alert">
+          {% for error in errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <div class="registration-fields">
+          <label class="registration-field">
+            Dia da semana
+            <select name="dia_semana" required>
+              <option value="">Selecione</option>
+              {% for day in ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] %}
+              <option
+                value="{{ day }}"
+                {% if values.get('dia_semana') == day %}selected{% endif %}
+              >
+                {{ day }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="registration-field">
+            Bloco
+            <input
+              name="bloco"
+              type="text"
+              maxlength="1"
+              pattern="[A-Za-z]"
+              value="{{ values.get('bloco', '') }}"
+              placeholder="Ex.: A"
+              required
+            />
+            <small>Uma letra de A a Z; no padrão da instituição, A–L.</small>
+          </label>
+          <label class="registration-field">
+            Hora de início
+            <input
+              name="hora_inicio"
+              type="time"
+              value="{{ values.get('hora_inicio', '') }}"
+              required
+            />
+          </label>
+          <label class="registration-field">
+            Hora de fim
+            <input
+              name="hora_fim"
+              type="time"
+              value="{{ values.get('hora_fim', '') }}"
+              required
+            />
+          </label>
+        </div>
+
+        <div class="registration-actions">
+          <a class="registration-cancel" href="{{ url_for('slots.slots') }}">
+            Cancelar
+          </a>
+          <button class="registration-submit" type="submit">
+            Cadastrar slot
+          </button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

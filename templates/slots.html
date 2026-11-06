@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Slots de horários | Organizador de Horários</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css', v=8) }}"
+    />
+  </head>
+  <body class="registration-page">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Organizador de Horários, início">
+        <span class="brand-mark" aria-hidden="true">▦</span>
+        <span class="brand-copy">
+          <strong>Organizador de Horários</strong>
+          <small>Cadastro e visualização</small>
+        </span>
+      </a>
+      <a class="new-discipline-link" href="{{ url_for('slots.new_slot') }}">
+        <span aria-hidden="true">+</span> Novo slot
+      </a>
+    </header>
+
+    <main class="registration-main course-list-main">
+      <a class="registration-back" href="/">← Voltar para a grade</a>
+      <div class="registration-heading">
+        <h1>Slots de horários</h1>
+        <p>
+          Blocos cadastrados, ordenados por dia da semana e letra do bloco.
+        </p>
+      </div>
+
+      {% if created %}
+      <p class="registration-success" role="status">
+        Slot cadastrado com sucesso.
+      </p>
+      {% endif %}
+
+      <section class="course-table-panel" aria-label="Slots cadastrados">
+        {% if slots %}
+        <div class="course-table-wrap">
+          <table class="course-table">
+            <thead>
+              <tr>
+                <th scope="col">Código</th>
+                <th scope="col">Dia</th>
+                <th scope="col">Bloco</th>
+                <th scope="col">Início</th>
+                <th scope="col">Fim</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for slot in slots %}
+              <tr>
+                <td>{{ slot.hor_codigo_slot }}</td>
+                <td>{{ slot.hor_dia_semana }}</td>
+                <td>{{ slot.hor_bloco }}</td>
+                <td>{{ slot.hor_hora_inicio }}</td>
+                <td>{{ slot.hor_hora_fim }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="course-empty-state">Ainda não há slots cadastrados.</p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>
