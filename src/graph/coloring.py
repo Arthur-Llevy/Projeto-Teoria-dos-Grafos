@@ -6,6 +6,7 @@ Each 15 hours of discipline workload represents one weekly 50-minute meeting.
 """
 
 from collections import defaultdict
+from itertools import permutations
 from typing import Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 from src.graph.graph_db import GraphDatabase
@@ -65,6 +66,27 @@ def _professor_for_allocation(
         ),
         expected_id,
     )
+
+
+def _preferred_slot_ids_for_allocation(
+    graph: GraphDatabase, allocation: Dict
+) -> Optional[Set[int]]:
+    professor_id = _professor_for_allocation(graph, allocation)
+    if professor_id is None:
+        return None
+    professor = graph.nodes.get(professor_id)
+    if professor is None:
+        return None
+
+    raw_slot_ids = professor["properties"].get("horarios_preferidos", [])
+    if not raw_slot_ids:
+        return None
+    try:
+        return {int(slot_id) for slot_id in raw_slot_ids}
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Preferências de horário inválidas para o professor {professor_id}."
+        ) from exc
 
 
 def _discipline_workload(discipline: Dict) -> int:
@@ -183,7 +205,10 @@ def color_allocations(
         raise ValueError("max_colors deve ser maior que zero.")
 
     adjacency = build_conflict_graph(graph)
-    available_slots = len(graph.get_nodes_by_type(SLOT_NODE_TYPE))
+    available_slot_ids = {
+        _slot_id(slot) for slot in graph.get_nodes_by_type(SLOT_NODE_TYPE)
+    }
+    available_slots = len(available_slot_ids)
     if max_colors is None:
         max_colors = available_slots
     if adjacency and max_colors < 1:
@@ -201,17 +226,16 @@ def color_allocations(
             ),
         )
         unavailable = {colors[n] for n in adjacency[vertex] if n in colors}
-        color = next(
-            (
-                candidate
-                for candidate in range(1, max_colors + 1)
-                if candidate not in unavailable
-            ),
-            None,
-        )
+        color = None
+        for candidate in range(1, max_colors + 1):
+            if candidate in unavailable:
+                continue
+            color = candidate
+            break
         if color is None:
             raise ValueError(
-                f"Não foi possível colorir as aulas com até {max_colors} horários."
+                "Não foi possível colorir as aulas com até "
+                f"{max_colors} horários respeitando as preferências informadas."
             )
         colors[vertex] = color
         uncolored.remove(vertex)
@@ -413,6 +437,7 @@ def map_colors_to_slots(
     """Assign each color a real 50-minute slot ID from the loaded SQLite graph."""
     slots = sorted(graph.get_nodes_by_type(SLOT_NODE_TYPE), key=_slot_sort_key)
     color_ids = sorted(set(colors.values()))
+    available_slot_ids = {_slot_id(slot) for slot in slots}
     if len(color_ids) > len(slots):
         raise ValueError(
             f"O grafo usa {len(color_ids)} cores, mas o banco só tem "
@@ -420,6 +445,10 @@ def map_colors_to_slots(
         )
     if any(color < 1 for color in color_ids):
         raise ValueError("As cores precisam ser índices inteiros a partir de 1.")
+
+    allowed_slots_by_color = {
+        color: set(available_slot_ids) for color in color_ids
+    }
 
     groups = []
     for vertices, workload in _allocation_groups(graph):
@@ -448,10 +477,20 @@ def map_colors_to_slots(
             )
 
         remaining = [color for color in color_ids if color not in mapped]
-        color = max(remaining, key=lambda item: (groups_by_color[item], -item))
+        color = max(
+            remaining,
+            key=lambda item: (
+                groups_by_color[item],
+                -len(allowed_slots_by_color[item]),
+                -item,
+            ),
+        )
         for slot in slots:
             slot_id = _slot_id(slot)
-            if slot_id in used_slot_ids:
+            if (
+                slot_id in used_slot_ids
+                or slot_id not in allowed_slots_by_color[color]
+            ):
                 continue
             mapped[color] = slot
             used_slot_ids.add(slot_id)
@@ -469,8 +508,8 @@ def map_colors_to_slots(
 
     if not search():
         raise ValueError(
-            "Não há combinação de horários reais que respeite os padrões "
-            "de 30h e 60h."
+            "Não há combinação de horários reais que respeite as preferências "
+            "informadas e os padrões de blocos das disciplinas."
         )
     return {color: _slot_id(mapped[color]) for color in color_ids}
 
@@ -482,11 +521,129 @@ def color_and_assign_slots(
     """Color DB-backed class meetings and attach their real ``hor_id`` values."""
     colors = color_allocations(graph, max_colors=max_colors)
     slot_ids = map_colors_to_slots(graph, colors)
+    slots_by_id = {
+        _slot_id(slot): slot for slot in graph.get_nodes_by_type(SLOT_NODE_TYPE)
+    }
+    assigned_slot_by_vertex = {
+        vertex: slot_ids[color] for vertex, color in colors.items()
+    }
+    _apply_professor_preferences(
+        graph, colors, assigned_slot_by_vertex, slots_by_id
+    )
     results: Dict[str, Dict[str, int]] = {}
     for vertex, color in colors.items():
-        assignment = {"color": color, "horario_id": slot_ids[color]}
+        assignment = {
+            "color": color,
+            "horario_id": assigned_slot_by_vertex[vertex],
+        }
         results[vertex] = assignment
         allocation_id = vertex.split("#50min:", maxsplit=1)[0]
         stored = graph.nodes[allocation_id]["properties"]["assignments"]
         next(item for item in stored if item["vertex"] == vertex).update(assignment)
     return results
+
+
+def _apply_professor_preferences(
+    graph: GraphDatabase,
+    colors: Mapping[str, int],
+    assigned_slot_by_vertex: Dict[str, int],
+    slots_by_id: Dict[int, Dict],
+) -> None:
+    """Place preference-holding teachers without moving unrelated vertices.
+
+    Colors provide a valid baseline. Preferred allocations are then assigned
+    independently to their professor's selected real slots, while every other
+    vertex keeps its baseline slot. This avoids treating a color as a global
+    slot alias, which had moved unrelated classes when one teacher chose Friday.
+    """
+    available_slot_ids = set(slots_by_id)
+    adjacency = build_conflict_graph(graph)
+    vertices_by_allocation = _vertices_by_allocation(graph)
+    groups = []
+    for allocation in graph.get_nodes_by_type(VERTEX_TYPE):
+        allocation_id = allocation["id"]
+        preferred = _preferred_slot_ids_for_allocation(graph, allocation)
+        if preferred is None:
+            continue
+        preferred &= available_slot_ids
+        if not preferred:
+            professor_id = _professor_for_allocation(graph, allocation)
+            raise ValueError(
+                f"O professor {professor_id} não tem horários preferidos "
+                "válidos na tabela hor_horario."
+            )
+        vertices = vertices_by_allocation[allocation_id]
+        if any(vertex not in colors for vertex in vertices):
+            raise ValueError(f"A alocação {allocation_id} está sem cor.")
+        discipline = _discipline_for_allocation(graph, allocation)
+        groups.append(
+            (vertices, sorted(preferred), _discipline_workload(discipline))
+        )
+
+    if not groups:
+        return
+
+    preferred_vertices = {vertex for vertices, _, _ in groups for vertex in vertices}
+    fixed = {
+        vertex: slot_id
+        for vertex, slot_id in assigned_slot_by_vertex.items()
+        if vertex not in preferred_vertices
+    }
+    choices = []
+    for vertices, preferred, workload in groups:
+        options = []
+        for candidate in permutations(preferred, len(vertices)):
+            candidate_slots = [slots_by_id[slot_id] for slot_id in candidate]
+            if not _valid_allocation_slots(candidate_slots, workload):
+                continue
+            candidate_map = dict(zip(vertices, candidate))
+            if any(
+                candidate_map[vertex] == fixed[neighbor]
+                for vertex in vertices
+                for neighbor in adjacency[vertex]
+                if neighbor in fixed
+            ):
+                continue
+            options.append(candidate_map)
+        if not options:
+            raise ValueError(
+                "Os horários preferidos não permitem acomodar as aulas "
+                "consecutivas sem conflito com outras disciplinas."
+            )
+        choices.append(options)
+
+    selected: Dict[str, int] = {}
+
+    def search(index: int) -> bool:
+        if index == len(choices):
+            return True
+        for option in choices[index]:
+            if any(
+                option[vertex] == selected[neighbor]
+                for vertex in option
+                for neighbor in adjacency[vertex]
+                if neighbor in selected
+            ):
+                continue
+            selected.update(option)
+            if search(index + 1):
+                return True
+            for vertex in option:
+                del selected[vertex]
+        return False
+
+    if not search(0):
+        raise ValueError(
+            "As preferências de horário de professores diferentes entram em "
+            "conflito entre si."
+        )
+    assigned_slot_by_vertex.update(selected)
+    for vertex, neighbors in adjacency.items():
+        if any(
+            assigned_slot_by_vertex[vertex] == assigned_slot_by_vertex[neighbor]
+            for neighbor in neighbors
+        ):
+            raise ValueError(
+                "A aplicação das preferências gerou um conflito de horário "
+                f"entre {vertex} e outra aula."
+            )

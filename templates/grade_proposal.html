@@ -45,7 +45,8 @@
         <strong>{{ rows|length }} aulas semanais propostas</strong>
         <span>
           O algoritmo ainda não atribui salas; elas aparecerão como não
-          informadas até essa etapa ser implementada.
+          informadas até essa etapa ser implementada. Horários preferidos de
+          professores são tratados como opções obrigatórias para suas aulas.
         </span>
       </section>
 
@@ -59,6 +60,7 @@
               <th>Professor</th>
               <th>Aula</th>
               <th>Período</th>
+              <th>Preferência</th>
             </tr>
           </thead>
           <tbody>
@@ -73,6 +75,7 @@
               <td>{{ row.professor }}</td>
               <td>{{ row.aula }}</td>
               <td>{{ row.periodo }}º</td>
+              <td>{{ row.preferencia }}</td>
             </tr>
             {% endfor %}
           </tbody>

@@ -51,6 +51,10 @@ def _generate_proposal():
         discipline_properties = discipline.get("properties", {})
         professor_properties = professor.get("properties", {})
         horario_properties = horario.get("properties", {})
+        preferred_slot_ids = {
+            int(slot_id)
+            for slot_id in professor_properties.get("horarios_preferidos", [])
+        }
         day = horario_properties.get("dia_semana", "")
         start = horario_properties.get("hora_inicio", "")
         rows.append({
@@ -66,6 +70,13 @@ def _generate_proposal():
             "periodo": discipline_properties.get("periodo", ""),
             "carga_horaria": discipline_properties.get("carga_horaria", ""),
             "professor": professor_properties.get("nome", "Professor não informado"),
+            "preferencia": (
+                "Atendida"
+                if preferred_slot_ids and result["horario_id"] in preferred_slot_ids
+                else "Fora da preferência"
+                if preferred_slot_ids
+                else "Sem preferência"
+            ),
         })
     rows.sort(
         key=lambda row: (

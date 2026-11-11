@@ -43,6 +43,25 @@ def load_from_sqlite(graph_db, db_path: Union[str, Path]) -> bool:
     # ------------------------------------------------------------------
     # Nós: Professores
     # ------------------------------------------------------------------
+    preferred_slots_by_professor = {}
+    has_preference_table = cur.execute(
+        """
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'table' AND name = 'pro_preferencia_horario'
+        """
+    ).fetchone()
+    if has_preference_table:
+        for preference in cur.execute(
+            """
+            SELECT pro_id, hor_id
+            FROM pro_preferencia_horario
+            ORDER BY pro_id, hor_id
+            """
+        ):
+            preferred_slots_by_professor.setdefault(
+                preference["pro_id"], []
+            ).append(preference["hor_id"])
+
     for r in cur.execute("SELECT * FROM pro_professor"):
         pid = f"prof:{r['pro_id']}"
         graph_db.add_node_with_id(
@@ -53,6 +72,9 @@ def load_from_sqlite(graph_db, db_path: Union[str, Path]) -> bool:
                 "nome": r["pro_nome"],
                 "matricula": r["pro_matricula"],
                 "cur_id": r["cur_id"],
+                "horarios_preferidos": preferred_slots_by_professor.get(
+                    r["pro_id"], []
+                ),
             },
         )
         if r["cur_id"] is not None:
